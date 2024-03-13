@@ -69,24 +69,55 @@ public class Agent1 extends TWAgent {
 
     protected TWThought think() {
     //        getMemory().getClosestObjectInSensorRange(Tile.class);
-        System.out.println("Simple Score: " + this.score);
-        return new TWThought(TWAction.MOVE,getRandomDirection());
+        // System.out.println("Simple Score: " + this.score);
+        // return new TWThought(TWAction.MOVE,getRandomDirection());
     }
-
-    @Override
+ 
+    @Overridemmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
     protected void act(TWThought thought) {
+        // get the object based on the memory
+        Object currentPositionObject = this.getMemory().getMemoryGrid().get(this.getX(), this.getY());
+        switch(thought.getAction()){
+        // MOVE, PICKUP, PUTDOWN, REFUEL;    
+            case PICKUP:
+                if (currentPositionObject instanceof TWTile){
+                    pickUpTile((TWTile)currentPositionObject);
+                    this.getMemory().removeObject(this.getX(), this.getY());
+                    this.addPublicMessage("UpdateMemoryMap " + this.getX() + " " + this.getY()+" " + "null");
+                    act(this.think());
+                }
+                else{
+                    System.out.println("No tile to pick up");
+                }
+                return;
 
-        //You can do:
-        //move(thought.getDirection())
-        //pickUpTile(Tile)
-        //putTileInHole(Hole)
-        //refuel()
+            case PUTDOWN:
+                if (currentPositionObject instanceof TWHole){
+                    putTileInHole((TWHole)currentPositionObject);
+                    this.getMemory().removeObject(this.getX(), this.getY());
+                    this.addPublicMessage("UpdateMemoryMap " + this.getX() + " " + this.getY()+" " + "null");
+                    act(this.think());
+                }
+                else{
+                    System.out.println("No hole to put tile in");
+                }
+                return;
 
+            case REFUEL:
+                refuel();
+                act(this.think());
+                return;
+                
+
+        }
         try {
             this.move(thought.getDirection());
+            this.addPublicMessage("AgentPosition " + this.name + " " + this.getX() + " " + this.getY()); 
+            this.addPublicMessage("AgentCarriedTiles " + this.name + " " + this.carriedTiles.size());
         } catch (CellBlockedException ex) {
 
             // Cell is blocked, replan?
+            act(this.think());
         }
     }
             
