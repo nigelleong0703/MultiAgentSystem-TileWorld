@@ -32,7 +32,7 @@ public class Agent1 extends TWAgent {
     private int[] otherAgentCarriedTiles = new int[5];
 
     public Agent1(String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
-        super(name, xpos, ypos, env, fuelLevel);
+        super(xpos, ypos, env, fuelLevel);
         this.name = name;
         clearMessage();
         for (int i = 0; i < this.otherAgentPosition.length; i++) {
@@ -43,17 +43,17 @@ public class Agent1 extends TWAgent {
 
     }
 
-    private clearMessage(){
+    private void clearMessage(){
         this.privateMessage = new String[] {"","","","",""};
         this.publicMessage = "";
     }
     
-    private addPrivateMessage(int agentnumber, String message){
+    private void addPrivateMessage(int agentnumber, String message){
         // agent number should be 1-5
         this.privateMessage[agentnumber-1] = this.privateMessage[agentnumber] + ";" + message;
     }
 
-    private addPublicMessage(String message){
+    private void addPublicMessage(String message){
         this.publicMessage = this.publicMessage + ";" + message;
     }
 
@@ -85,7 +85,7 @@ public class Agent1 extends TWAgent {
 
     private void ReceiveMessage(){
         // message(from,to, message)
-        String[] receivedMessage = this.getEnvironment().getMessages(this.name);
+        ArrayList<Message> receivedMessage = this.getEnvironment().getMessages();
         for (Message message: receivedMessage){
             if (this.name.equals(message.getTo())){
                 System.out.println(this.name + " Received message from " + message.getFrom() + " to " +message.getTo() + ": " + message.getMessage()); 
@@ -95,7 +95,7 @@ public class Agent1 extends TWAgent {
                 
                 for (String mes: messageSplit){
                     String[] tempMes = mes.split(" ");
-                    messageTopic = tempMes[0];
+                    String messageTopic = tempMes[0];
                     switch(messageTopic){
                         case "Request":
                             continue;
@@ -111,7 +111,7 @@ public class Agent1 extends TWAgent {
                 String[] messageSplit = message.getMessage().split(";");
                 for (String mes: messageSplit){
                     String[] tempMes = mes.split(" ");
-                    messageTopic = tempMes[0];
+                    String messageTopic = tempMes[0];
                     switch(messageTopic){
                         case "FindFuelStation":
                             continue;
@@ -133,6 +133,7 @@ public class Agent1 extends TWAgent {
         // System.out.println("Simple Score: " + this.score);
         // return new TWThought(TWAction.MOVE,getRandomDirection());
         this.ReceiveMessage();
+        return new TWThought(TWAction.MOVE,getRandomDirection());
     }
 
  
@@ -145,7 +146,9 @@ public class Agent1 extends TWAgent {
             case PICKUP:
                 if (currentPositionObject instanceof TWTile){
                     pickUpTile((TWTile)currentPositionObject);
-                    this.getMemory().removeObject(this.getX(), this.getY());
+                    // TWAgent twentity = new TWEntity(this.getX(), this.getY(), this.getEnvironment());
+                    TWEntity e = (TWEntity) this.getEnvironment().getObjectGrid().get(this.getX(), this.getY());
+                    this.getMemory().removeObject(e);
                     this.addPublicMessage("UpdateMemoryMap " + this.getX() + " " + this.getY()+" " + "null");
                     act(this.think());
                 }
@@ -157,7 +160,8 @@ public class Agent1 extends TWAgent {
             case PUTDOWN:
                 if (currentPositionObject instanceof TWHole){
                     putTileInHole((TWHole)currentPositionObject);
-                    this.getMemory().removeObject(this.getX(), this.getY());
+                    TWEntity e = (TWEntity) this.getEnvironment().getObjectGrid().get(this.getX(), this.getY());
+                    this.getMemory().removeObject(e);
                     this.addPublicMessage("UpdateMemoryMap " + this.getX() + " " + this.getY()+" " + "null");
                     act(this.think());
                 }
