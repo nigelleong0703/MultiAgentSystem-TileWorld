@@ -67,13 +67,60 @@ public class Agent1 extends TWAgent {
         this.clearMessage();
     }
 
+    private void ReceiveMessage(){
+        // message(from,to, message)
+        String[] receivedMessage = this.getEnvironment().getMessages(this.name);
+        for (Message message: receivedMessage){
+            if (this.name.equals(message.getTo())){
+                System.out.println(this.name + " Received message from " + message.getFrom() + " to " +message.getTo() + ": " + message.getMessage()); 
+
+                // As the message contains several event, which is split by ";"
+                String[] messageSplit = message.getMessage().split(";");
+                
+                for (String mes: messageSplit){
+                    String[] tempMes = mes.split(" ");
+                    messageTopic = tempMes[0];
+                    switch(messageTopic){
+                        case "Request":
+                            continue;
+                        case "Require":
+                            continue;
+                        case "GoFindFuelStation":
+                            continue;
+                    }
+
+                }
+            }
+            if (message.getTo().equals("all")){
+                String[] messageSplit = message.getMessage().split(";");
+                for (String mes: messageSplit){
+                    String[] tempMes = mes.split(" ");
+                    messageTopic = tempMes[0];
+                    switch(messageTopic){
+                        case "FindFuelStation":
+                            continue;
+                        case "UpdateMemoryMap":
+                            continue;
+                        case "AgentPosition":
+                            continue;
+                        case "AgentCarriedTiles":
+                            continue;
+                    }
+                }
+            }
+                
+        }
+    }
+
     protected TWThought think() {
     //        getMemory().getClosestObjectInSensorRange(Tile.class);
         // System.out.println("Simple Score: " + this.score);
         // return new TWThought(TWAction.MOVE,getRandomDirection());
+        this.ReceiveMessage();
     }
+
  
-    @Overridemmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+    @Override
     protected void act(TWThought thought) {
         // get the object based on the memory
         Object currentPositionObject = this.getMemory().getMemoryGrid().get(this.getX(), this.getY());
