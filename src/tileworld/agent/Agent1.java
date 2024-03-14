@@ -28,19 +28,12 @@ public class Agent1 extends TWAgent {
     private final int mapsizeY = this.getEnvironment().getyDimension();
     private int[][] observedMap = new int[mapsizeX][mapsizeY];
     private AstarPathGenerator pathGenerator = new AstarPathGenerator(this.getEnvironment(), this, mapsizeX+mapsizeY);
-    private int[][] otherAgentPosition = new int[5][2];
-    private int[] otherAgentCarriedTiles = new int[5];
+
 
     public Agent1(String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         this.name = name;
         clearMessage();
-        for (int i = 0; i < this.otherAgentPosition.length; i++) {
-            // if position is unknown, it is declared as -1
-            this.otherAgentPosition[i][0] = -1; 
-            this.otherAgentPosition[i][1] = -1; 
-        }
-
     }
 
     private void clearMessage(){
@@ -55,15 +48,6 @@ public class Agent1 extends TWAgent {
 
     private void addPublicMessage(String message){
         this.publicMessage = this.publicMessage + ";" + message;
-    }
-
-    public void updateOtherAgentPosition(int agentnumber, int x, int y){
-        this.otherAgentPosition[agentnumber-1][0] = x;
-        this.otherAgentPosition[agentnumber-1][1] = y;
-    }
-
-    public void updateOtherAgentCarriedTiles(int agentnumber, int carriedTiles){
-        this.otherAgentCarriedTiles[agentnumber-1] = carriedTiles;
     }
 
     @Override
