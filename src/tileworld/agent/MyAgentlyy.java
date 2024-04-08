@@ -19,7 +19,7 @@ public class MyAgentlyy extends TWAgent{
     private static final Object TWTile = null;
     private static final Object TWHole = null;
     private String name = "MyAgentlyy";
-    private MyMemory memory;
+//    private MyMemory memory;
 
 
     enum Mode{
@@ -29,7 +29,7 @@ public class MyAgentlyy extends TWAgent{
     public MyAgentlyy(int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         this.name = name;
-        this.memory = new MyMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
+//        this.memory = new MyMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
         this.sensor = new TWAgentSensor(this, Parameters.defaultSensorRange);
     }
 
