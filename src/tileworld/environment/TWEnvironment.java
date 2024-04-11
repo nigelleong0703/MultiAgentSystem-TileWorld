@@ -14,6 +14,7 @@ import sim.util.Int2D;
 import sun.font.TrueTypeFont;
 import tileworld.Parameters;
 import tileworld.TWGUI;
+import tileworld.agent.AgentLZH;
 import tileworld.agent.Message;
 import tileworld.agent.SimpleTWAgent;
 import tileworld.agent.TWAgent;
@@ -108,21 +109,37 @@ public class TWEnvironment extends SimState implements Steppable {
         schedule.scheduleRepeating(this, 1, 1.0);
         
         //Now we create some agents
+        // Int2D pos = this.generateRandomLocation();
+        // createAgent(new SimpleTWAgent("agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        // pos = this.generateRandomLocation();
+        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        // pos = this.generateRandomLocation();
+        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        // pos = this.generateRandomLocation();
+        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        // pos = this.generateRandomLocation();
+        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos = this.generateRandomLocation();
-        createAgent(new SimpleTWAgent("agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
-        pos = this.generateRandomLocation();
-        createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
-        pos = this.generateRandomLocation();
-        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
-        // pos = this.generateRandomLocation();
-        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
-        // pos = this.generateRandomLocation();
-        // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        assert(this.isInBounds(pos.getX(), pos.getY()));
+        createAgent(new AgentLZH(0, "agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        Int2D pos2 = this.generateRandomLocation();
+        assert(this.isInBounds(pos2.getX(), pos2.getY()));
+        createAgent(new AgentLZH(1, "agent2", pos2.getX(), pos2.getY(), this, Parameters.defaultFuelLevel));
+        Int2D pos3 = this.generateRandomLocation();
+        assert(this.isInBounds(pos3.getX(), pos3.getY()));
+        createAgent(new AgentLZH(2, "agent3", pos3.getX(), pos3.getY(), this, Parameters.defaultFuelLevel));
+        Int2D pos4 = this.generateRandomLocation();
+        assert(this.isInBounds(pos4.getX(), pos4.getY()));
+        createAgent(new AgentLZH(3, "agent4", pos4.getX(), pos4.getY(), this, Parameters.defaultFuelLevel));
+        Int2D pos5 = this.generateRandomLocation();
+        assert(this.isInBounds(pos5.getX(), pos5.getY()));
+        createAgent(new AgentLZH(4, "agent5", pos5.getX(), pos5.getY(), this, Parameters.defaultFuelLevel));
         
-//        
+    //        
         //create the fueling station
-        pos = this.generateRandomLocation();
-        fuelingStation = new TWFuelStation(pos.getX(), pos.getY(),this);
+        Int2D posfuel = this.generateRandomLocation();
+        // fuelingStation = new TWFuelStation(posfuel.getX(), posfuel.getY(),this);
+        fuelingStation = new TWFuelStation(pos.getX(), pos.getY(), this);
 
 
 

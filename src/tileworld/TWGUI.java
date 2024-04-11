@@ -76,7 +76,7 @@ public class TWGUI extends GUIState {
 
     /**
      * Portrayal for agent layer
-     */
+     */	
 
     ObjectGridPortrayal2D agentGridPortrayal = new ObjectGridPortrayal2D();
 
