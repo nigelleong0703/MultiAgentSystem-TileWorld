@@ -103,6 +103,30 @@ public class TWPlannerLZH implements TWPlanner {
     public void voidGoals(){
         goals.clear();
     }
+    public int getRemainingPathLength(){
+        // 根据goal list，串联每一个goal，输出还需要多少的步数
+        if (goals == null || goals.isEmpty()){
+            return 0;
+        }
+        int totalPathLength = 0;
+        int startX = agent.getX();
+        int startY = agent.getY();
+        int currentX = startX;
+        int currentY = startY;
+        for (Int2D goal: goals){
+            if(this.agent.getEnvironment().isInBounds(goal.x, goal.y)){
+                TWPath path = pathGenerator.findPath(currentX, currentY, goal.x, goal.y);
+                if(path != null){
+                    totalPathLength += (path.getpath().size() - 1);
+                    currentX = goal.x;
+                    currentY = goal.y;
+                }
+            }
+                
+        }
+
+        return totalPathLength;
+    }
 
 }
 

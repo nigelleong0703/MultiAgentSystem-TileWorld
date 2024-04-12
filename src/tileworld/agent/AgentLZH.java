@@ -310,22 +310,6 @@ public class AgentLZH extends TWAgent {
         /** 
          * get message and update memory
          */
-
-        
-//         ArrayList<Message> messages = this.getEnvironment().getMessages();
-//          for (Message m : messages) {
-//              if (m == null || m.getMessage() == null || m.getFrom() == this.getName()) continue;
-//              Int2D fuelStationPos = ((MyMessage)m).getFuelStationPosition();
-//              if (this.memory.getFuelStation() == null && fuelStationPos != null) {
-//                  this.memory.setFuelStation(fuelStationPos.x, fuelStationPos.y);
-//  //  				break;
-//              }
-//              Bag sharedObjects = ((MyMessage)m).getSensedObjects();
-            //  Int2D posAgent = ((MyMessage)m).getAgentPosition();
-//              if (sharedObjects != null) {
-//                  this.memory.mergeMemory(sharedObjects, posAgent);
-//              }
-//          }
         ArrayList<Message> received_message = this.getEnvironment().getMessages();
         for (Message message : received_message) {
             // System.out.println(message);
@@ -419,51 +403,101 @@ public class AgentLZH extends TWAgent {
          */
 
         // TO DO:
+        // 逻辑思路 现决定模式，再决定Thought
         mode = Mode.EXPLORE;
         if (memory.getFuelStation() == null) {
-            mode = Mode.FIND_FUELSTATION;
-            System.out.println("Setting mode to find fuel station");
+            if (this.getFuelLevel() > this.fuelThreshold) {
+                mode = Mode.FIND_FUELSTATION;
+                System.out.println("Setting mode to find fuel station");
+            }
+            else {
+                mode = Mode.WAIT;
+                System.out.println("No enough fuel, Setting mode to wait");
+            }
         }
-        // if (memory.getFuelStation() == null && (this.getFuelLevel() < this.fuelThreshold)) mode = Mode.FIND_FUELSTATION;
-        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < this.fuelThreshold || this.getFuelLevel() < this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
+        // 如果找到了油站，而且自己要没有油了，就去加油
+        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < this.fuelThreshold || this.getFuelLevel() < 1.2 * this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
             mode = Mode.REFUEL;
+            System.out.println("Setting mode to refuel");
         }
-        else if (this.getFuelLevel()<this.fuelThreshold){
-            mode = Mode.WAIT;
-            return new TWThought(TWAction.MOVE, TWDirection.Z);
-        }
-        else if (mode != Mode.FIND_FUELSTATION){
-        // 如果不需要找加油站和不需要加油， 就只剩下EXPLORE, COLLECT和FILL
-            if (this.hasTile() && this.carriedTiles.size() < 3 && targethole != null) {
-                if (targettile != null && (this.getDistanceTo(targethole.getX(),targethole.getY()) <= this.getDistanceTo(targettile.getX(),targettile.getY()))) {
-                    mode = Mode.FILL;
-                } else if (targettile != null && (this.getDistanceTo(targethole.getX(),targethole.getY()) > this.getDistanceTo(targettile.getX(),targettile.getY()))){
-                    mode = Mode.COLLECT;
-                } else if (targettile == null) {
-                    mode = Mode.FILL;
+        // 如果还有油，而且找到了加油站，那就应该pick explore 
+        else if (mode!= Mode.FIND_FUELSTATION){
+            // 如果有tile
+            if (this.hasTile()){
+                // 如果身上有少过3个tile
+                if (this.carriedTiles.size() <3){
+                    // 如果有目标hole
+                    if (targethole != null){
+                        // 如果有目标tile
+                        if(targettile != null){
+                            // 需要判断哪一个更近
+                            // 如果目标tile更近
+                            if (this.getDistanceTo(targethole.getX(), targethole.getY()) > this.getDistanceTo(targettile.getX(), targettile.getY())){
+                                mode = Mode.COLLECT;
+                                System.out.println("Setting mode to collect");
+                            }
+                            // 如果目标hole更近
+                            else{
+                                mode = Mode.FILL;
+                                System.out.println("Setting mode to fill");
+                            }
+                        }
+                        // 如果没有目标tile， 但是有Hole 只能去填补了
+                        else {
+                            mode = Mode.FILL;
+                            System.out.println("Setting mode to fill");
+                        }
+                    }
+                    // 如果没有目标hole
+                    else{
+                        //如果有目标tile
+                        if (targettile != null){
+                            mode = Mode.COLLECT;
+                            System.out.println("Setting mode to collect");
+                        }
+                        // 如果没有目标tile
+                        else{
+                            mode = Mode.EXPLORE;
+                            System.out.println("Setting mode to explore");  
+                        } 
+                    }
                 }
-            } else if (this.hasTile() && this.carriedTiles.size() < 3 && targethole == null) {
-                if (targettile != null) {
+                // 如果身上有3个tile
+                else{
+                    // 如果有目标hole
+                    if (targethole != null){
+                        mode = Mode.FILL;
+                        System.out.println("Setting mode to fill");
+                    }
+                    // 如果没有目标hole
+                    else{
+                        mode = Mode.EXPLORE;
+                        System.out.println("Setting mode to explore");
+                    }
+                }
+            }
+            // 如果完全没有tile
+            else{
+                // mmemory里有目标tile吗？
+                if (targettile != null) { // this one can check for conflict with other agents
                     mode = Mode.COLLECT;
-                } else mode = Mode.EXPLORE;
-            } else if (this.hasTile() && this.carriedTiles.size() == 3){
-                if (targethole != null) {
-                    mode = Mode.FILL;
-                } else mode = Mode.EXPLORE;
-            } else if (!this.hasTile() && targettile != null) {
-                mode = Mode.COLLECT;
-            } else mode = Mode.EXPLORE;
+                    System.out.println("Setting mode to collect");
+                }
+                else {mode = Mode.EXPLORE;} 
+            }
         } else mode = Mode.EXPLORE;
 
         System.out.println(mode);
         Object curLocObject = this.memory.getMemoryGrid().get(x, y);
         // 如果不是空地， 那就直接打印出来是什么
         if (curLocObject != null){
-            System.out.println("Current Location Obj: " + curLocObject.getClass().getName());
-            
+            System.out.println("Current Location Obj: " + curLocObject.getClass().getName());   
         }
+
+        // 如果不是空地，那就是到达了goal或者碰巧经过goal
+        ///////////////////////////////////////////////////////////
         // 如果刚好经过加油站，而且剩下的有少过max的75%，就加油
-        if (curLocObject instanceof TWFuelStation && (this.getFuelLevel() < (0.75 * Parameters.defaultFuelLevel))){
+        if (curLocObject instanceof TWFuelStation && (this.getFuelLevel() < (0.8 * Parameters.defaultFuelLevel))){
             // System.out.println("Current Location is Fuel Station");
             System.out.println("Now Adding Fuel");
             return new TWThought(TWAction.REFUEL, null);
@@ -476,31 +510,71 @@ public class AgentLZH extends TWAgent {
             System.out.println("Picking up Tile");
             return new TWThought(TWAction.PICKUP, null);
         }
+        ///////////////////////////////////////////////////////////
 
-            // 由当前mode 和Goal 确定 Thought
+        // 由当前mode 和Goal 确定 Thought
+        // 如果现在的目标是找加油站
         if (mode == Mode.FIND_FUELSTATION){
             // 如果已经做好了path to fuel station就不需要重新路径规划
+            // 如果还没有做好规划
             if(this.planner.getGoals().isEmpty() && this.getAllPosition == true){
                 addGoalsForFuelStation();
-            }else{ //如果找到了fuelstation就移走这个目标以免重复
+            }else{ 
+                // 这边是已经做好了寻找加油站的规划
+                // 如果目前的位置在goal里面
+                double verysafeFuelThreshold = (double)this.planner.getRemainingPathLength() + 2 * this.fuelThreshold;
                 if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
                     int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
                     if (index != -1){ //如果找到了这个目标
-
                         ////这个需要debug一下
                         System.out.println(index);
-                        planner.getGoals().remove(0);
+                        planner.getGoals().remove(index);
                     }
+                }
+                // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold, 就可以做别的事情（collect or fill)
+                else if (this.getFuelLevel() > verysafeFuelThreshold){
+                    // 先看有没有有没有同时有tile and hole，如果同时有再看距离
+                    if (targettile!=null && targethole!=null){
+                        // 如果tile更近
+                        if (this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
+                            //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+                            if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
+                                planner.getGoals().add(0, new Int2D(targettile.getX(), targettile.getY()));
+                            }
+                        }
+                        // 如果hole更近
+                        else{
+                            //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+                            if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
+                                planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
+                            }
+                        }
+                    }
+                    // 如果只有目标tile
+                    else if(targettile!=null){
+                        //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+                        if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
+                            planner.getGoals().add(0, new Int2D(targettile.getX(), targettile.getY()));
+                        }
+                    }
+                    // 如果只有目标hole
+                    else if(targethole!=null){
+                        //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+                        if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
+                            planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
+                        }
+                    }
+                    // 什么都没有就不用做extra
                 }
             }
 
             for (int i = 0; i<planner.getGoals().size();i++){
                 System.out.println("Goals " + i + ": " + planner.getGoals().get(i));
             }
+        // 已经找到加油站了, 不是FIND_FUELSTATION
         }else{
             planner.voidGoals();
             planner.voidPlan();
-
             if (mode == Mode.REFUEL){
                 planner.getGoals().add(memory.getFuelStation());
             }
@@ -524,12 +598,11 @@ public class AgentLZH extends TWAgent {
         if (this.planner.getGoals().isEmpty()){
             return RandomMoveThought();
         }
-        //如果计划不为空，则调用plannerzyh.generatePlan()方法生成一条路径计划
+        //如果计划不为空，则调用generatePlan()方法生成一条路径计划
         this.planner.generatePlan();
 
-        
         if (!planner.hasPlan()) {
-            // 如果没有plan但是需要寻找fuelstation
+            // 如果没有plan但是需要寻找fuelstation(找完了自己的位置但是没有goalStation)
             if (this.mode == Mode.FIND_FUELSTATION) {
                 Int2D newGoal = generateRandomNearCell(planner.getGoals().get(0));
                 planner.getGoals().set(0, newGoal);
