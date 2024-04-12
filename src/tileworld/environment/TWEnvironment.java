@@ -138,8 +138,8 @@ public class TWEnvironment extends SimState implements Steppable {
     //        
         //create the fueling station
         Int2D posfuel = this.generateRandomLocation();
-        // fuelingStation = new TWFuelStation(posfuel.getX(), posfuel.getY(),this);
-        fuelingStation = new TWFuelStation(pos.getX(), pos.getY(), this);
+        fuelingStation = new TWFuelStation(posfuel.getX(), posfuel.getY(),this);
+        // fuelingStation = new TWFuelStation(pos.getX(), pos.getY(), this);
 
 
 

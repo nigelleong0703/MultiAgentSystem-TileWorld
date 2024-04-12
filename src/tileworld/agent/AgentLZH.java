@@ -35,6 +35,207 @@ import java.util.List;
 
 import java.util.Scanner;
 
+// Hungarian algorithm implementation
+class HungarianAlgorithm {
+    private double[][] costMatrix;
+    private int rows, cols, dim;
+    private double[] labelByWorker, labelByJob;
+    private int[] minSlackWorkerByJob;
+    private double[] minSlackValueByJob;
+    private int[] matchJobByWorker, matchWorkerByJob;
+    private int[] parentWorkerByCommittedJob;
+    private boolean[] committedWorkers;
+
+    public HungarianAlgorithm(double[][] costMatrix) {
+        this.dim = Math.max(costMatrix.length, costMatrix[0].length);
+        this.rows = costMatrix.length;
+        this.cols = costMatrix[0].length;
+        this.costMatrix = new double[this.dim][this.dim];
+        for (int w = 0; w < this.dim; w++) {
+            if (w < costMatrix.length) {
+                if (costMatrix[w].length != this.cols) {
+                    throw new IllegalArgumentException("Irregular cost matrix");
+                }
+                this.costMatrix[w] = Arrays.copyOf(costMatrix[w], this.dim);
+            } else {
+                this.costMatrix[w] = new double[this.dim];
+            }
+        }
+        labelByWorker = new double[this.dim];
+        labelByJob = new double[this.dim];
+        minSlackWorkerByJob = new int[this.dim];
+        minSlackValueByJob = new double[this.dim];
+        committedWorkers = new boolean[this.dim];
+        parentWorkerByCommittedJob = new int[this.dim];
+        matchJobByWorker = new int[this.dim];
+        Arrays.fill(matchJobByWorker, -1);
+        matchWorkerByJob = new int[this.dim];
+        Arrays.fill(matchWorkerByJob, -1);
+    }
+
+    protected void execute2() {
+        // Initialize
+        reduce();
+        computeInitialFeasibleSolution();
+        greedyMatch();
+
+        int w = fetchUnmatchedWorker();
+        while (w < dim) {
+            initializePhase(w);
+            executePhase();
+            w = fetchUnmatchedWorker();
+        }
+    }
+
+    protected int fetchUnmatchedWorker() {
+        int w;
+        for (w = 0; w < dim; w++) {
+            if (matchJobByWorker[w] == -1) {
+                break;
+            }
+        }
+        return w;
+    }
+
+    protected void reduce() {
+        for (int w = 0; w < dim; w++) {
+            double min = Double.POSITIVE_INFINITY;
+            for (int j = 0; j < dim; j++) {
+                if (costMatrix[w][j] < min) {
+                    min = costMatrix[w][j];
+                }
+            }
+            for (int j = 0; j < dim; j++) {
+                costMatrix[w][j] -= min;
+            }
+        }
+        double[] min = new double[dim];
+        for (int j = 0; j < dim; j++) {
+            min[j] = Double.POSITIVE_INFINITY;
+        }
+        for (int w = 0; w < dim; w++) {
+            for (int j = 0; j < dim; j++) {
+                if (costMatrix[w][j] < min[j]) {
+                    min[j] = costMatrix[w][j];
+                }
+            }
+        }
+        for (int j = 0; j < dim; j++) {
+            for (int w = 0; w < dim; w++) {
+                costMatrix[w][j] -= min[j];
+            }
+        }
+    }
+
+    protected void computeInitialFeasibleSolution() {
+        for (int j = 0; j < dim; j++) {
+            labelByJob[j] = Double.POSITIVE_INFINITY;
+        }
+        for (int w = 0; w < dim; w++) {
+            for (int j = 0; j < dim; j++) {
+                if (costMatrix[w][j] < labelByJob[j]) {
+                    labelByJob[j] = costMatrix[w][j];
+                }
+            }
+        }
+    }
+
+    protected void greedyMatch() {
+        for (int w = 0; w < dim; w++) {
+            for (int j = 0; j < dim; j++) {
+                if (matchJobByWorker[w] == -1 && matchWorkerByJob[j] == -1 && costMatrix[w][j] - labelByWorker[w] - labelByJob[j] == 0) {
+                    match(w, j);
+                }
+            }
+        }
+    }
+
+    protected void initializePhase(int w) {
+        Arrays.fill(committedWorkers, false);
+        Arrays.fill(parentWorkerByCommittedJob, -1);
+        committedWorkers[w] = true;
+        for (int j = 0; j < dim; j++) {
+            minSlackValueByJob[j] = costMatrix[w][j] - labelByWorker[w] - labelByJob[j];
+            minSlackWorkerByJob[j] = w;
+        }
+    }
+
+    protected void executePhase() {
+        while (true) {
+            int minSlackJob = -1;
+            double minSlackValue = Double.POSITIVE_INFINITY;
+            for (int j = 0; j < dim; j++) {
+                if (parentWorkerByCommittedJob[j] == -1 && minSlackValueByJob[j] < minSlackValue) {
+                    minSlackValue = minSlackValueByJob[j];
+                    minSlackJob = j;
+                }
+            }
+            if (minSlackValue > 0) {
+                updateLabeling(minSlackValue);
+            }
+            parentWorkerByCommittedJob[minSlackJob] = minSlackWorkerByJob[minSlackJob];
+            if (matchWorkerByJob[minSlackJob] == -1) {
+                /*
+                 * An unmatched job was found, so augment the matching and break out of this phase.
+                 */
+                int committedJob = minSlackJob;
+                int parentWorker = parentWorkerByCommittedJob[committedJob];
+                while (true) {
+                    int temp = matchJobByWorker[parentWorker];
+                    match(parentWorker, committedJob);
+                    committedJob = temp;
+                    if (committedJob == -1) {
+                        break;
+                    }
+                    parentWorker = parentWorkerByCommittedJob[committedJob];
+                }
+                return;
+            } else {
+                /*
+                 * Match the slack job to the slack worker. Mark the worker as committed.
+                 * Each worker is committed at most once during an augmenting path calculation, so this is safe.
+                 */
+                int worker = matchWorkerByJob[minSlackJob];
+                committedWorkers[worker] = true;
+                for (int j = 0; j < dim; j++) {
+                    if (parentWorkerByCommittedJob[j] == -1) {
+                        double slack = costMatrix[worker][j] - labelByWorker[worker] - labelByJob[j];
+                        if (slack < minSlackValueByJob[j]) {
+                            minSlackValueByJob[j] = slack;
+                            minSlackWorkerByJob[j] = worker;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    protected void updateLabeling(double slack) {
+        for (int w = 0; w < dim; w++) {
+            if (committedWorkers[w]) {
+                labelByWorker[w] += slack;
+            }
+        }
+        for (int j = 0; j < dim; j++) {
+            if (parentWorkerByCommittedJob[j] != -1) {
+                labelByJob[j] -= slack;
+            } else {
+                minSlackValueByJob[j] -= slack;
+            }
+        }
+    }
+
+    protected void match(int w, int j) {
+        matchJobByWorker[w] = j;
+        matchWorkerByJob[j] = w;
+    }
+
+    public int[] execute() {
+        execute2();
+        return Arrays.copyOf(matchJobByWorker, rows);
+    }
+}
+
 public class AgentLZH extends TWAgent {
     private String name;
     private int index;
@@ -50,6 +251,8 @@ public class AgentLZH extends TWAgent {
     private TWPlannerLZH planner;
     private MyMemory memory;
     // private TWAgentSensor sensor;
+    private boolean getAllPosition = false;
+    private int updateAllInitialPosition = 0;
 
     public AgentLZH(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
@@ -132,7 +335,35 @@ public class AgentLZH extends TWAgent {
 
     // 这个逻辑不是很对，需要改，这个是分层之后往回走来走去扫描
 
+    public Int2D findNearestBase(Int2D [] basePos, Int2D [] neighbouringAgents) {
+        // This function is to compare distance between agent and other agent , and determine my agent should go which starting point
+        // Int2D myagentPosition = new Int2D(this.getX(), this.getY());
+        int numAgents = 5;
+        int numBases = 5;
+        double [][] costMatrix = new double[numAgents][numBases];
+
+        for (int i = 0; i < numAgents; i++){
+            // TWAgent agent = neighbouringAgents.get(i);
+            for (int j = 0; j < numBases; j++){
+                costMatrix[i][j] = Math.abs(neighbouringAgents[i].x-basePos[j].x) + Math.abs(neighbouringAgents[i].y-basePos[j].y);
+                // costMatrix[i][j] = agent.getDistanceTo(basePos[j].x, basePos[j].y);
+            }
+        }
+
+        // Apply Hungarian Algorithm to find the best assignment
+        HungarianAlgorithm hungarianAlgorithm = new HungarianAlgorithm(costMatrix);
+        int[] result = hungarianAlgorithm.execute();
+
+        // Find the best assignment
+        Int2D[] optimalBases = new Int2D[numAgents];
+        for (int i = 0; i<result.length; i++){
+            optimalBases[i] = basePos[result[i]];
+        }
+        return optimalBases[this.index];
+    }
+
     public void addGoalsForFuelStation() {
+        System.out.println("Assigning search area for " + this.name);
         planner.voidGoals();
         planner.voidPlan();
         Int2D [] basePos = {
@@ -142,7 +373,10 @@ public class AgentLZH extends TWAgent {
             new Int2D(0,(Parameters.yDimension/5) * 3),
             new Int2D(0,(Parameters.yDimension/5) * 4),
         };
-        Int2D base = basePos[this.index];
+        // Instead of 去到指定的区域，找一个更接近的区域去寻找
+        Int2D base = findNearestBase(basePos, this.memory.getAgentPositionAll());
+        System.out.println(this.name + ", I need to go to: " + base);
+        // Int2D base = basePos[this.index];
         Int2D position = new Int2D(Parameters.defaultSensorRange, Parameters.defaultSensorRange);
         int depth= Parameters.defaultSensorRange;
 
@@ -284,7 +518,7 @@ public class AgentLZH extends TWAgent {
 //  //  				break;
 //              }
 //              Bag sharedObjects = ((MyMessage)m).getSensedObjects();
-//              Int2D posAgent = ((MyMessage)m).getAgentPosition();
+            //  Int2D posAgent = ((MyMessage)m).getAgentPosition();
 //              if (sharedObjects != null) {
 //                  this.memory.mergeMemory(sharedObjects, posAgent);
 //              }
@@ -294,29 +528,33 @@ public class AgentLZH extends TWAgent {
             // System.out.println(message);
             MyMessage myMessage = (MyMessage) message;
             Int2D fuelStation = myMessage.getFuelStationPosition();
-            // System.out.println(this.name + "receive msg");
-            // System.out.println(this.name + " receive msg " + fuelStation + " from " + message.getFrom());
             
             //从消息获得别人sensor object位置，感知物体包括位置和种类
             Bag sharedObjects = myMessage.getSensedObjects();
             //从消息获得agent位置
             Int2D agentPosition = myMessage.getAgentPosition();
 
-            // System.out.println("Check if got message");
-            // System.out.println(message == null);
-            // // System.out.println(myMessage.getMessage() == null);
-            // System.out.println(message.getFrom().equals(this.getName()));
-            // System.out.println();
+            // 记录每个agent的初始位置， 用于确定搜索区域
+            String numberOnly = message.getFrom().replaceAll("[^\\d]", "");
+            int agentIndex = Integer.parseInt(numberOnly) - 1;
+            if (agentPosition != null) {
+                // this.memory.agentInitialPos[agentIndex] = agentPosition;
+                // 从消息得到agent的位置，更新memory
+                if (this.memory.getAgentPosition(agentIndex) == null) {
+                    this.updateAllInitialPosition++;
+                }
+                this.memory.updateAgentPosition(agentIndex, agentPosition);
+            }
+            if (this.updateAllInitialPosition == 5) {
+                this.getAllPosition = true;
+            }
+            
             // 如果没有消息或者发送者是自己，跳过
             if (message == null || message.getFrom().equals(this.getName())) {
                 continue;
             }
             
             // 如果自身memory没有fuelstation位置和消息中有fuelstation位置，更新memory
-            // System.out.println(this.memory.getFuelStation());
-            // System.out.println(this.memory.getFuelStation());
-            // System.out.println(fuelStation);
-
             if(this.memory.getFuelStation()== null && fuelStation != null) {
                 System.out.println(this.name + "updating fuel station memory");
                 this.memory.setFuelStation(fuelStation.x, fuelStation.y);
@@ -338,11 +576,6 @@ public class AgentLZH extends TWAgent {
         TilesList = this.memory.getNearbyAllSortedObjects(x, y, 50, TWTile.class);
         HolesList = this.memory.getNearbyAllSortedObjects(x, y, 50, TWHole.class);
         TWEntity FuelStation = this.memory.getNearbyObject(x,y,200,TWFuelStation.class);
-        System.out.println(this.name);
-        System.out.println(FuelStation);
-        System.out.println(memory.getFuelStation());
-        System.out.println(TilesList);
-        System.out.println(HolesList);
         if(FuelStation != null){
             System.out.println("Fuel Station Found"); 
             Scanner scanner = new Scanner(System.in);
@@ -444,7 +677,7 @@ public class AgentLZH extends TWAgent {
             // 由当前mode 和Goal 确定 Thought
         if (mode == Mode.FIND_FUELSTATION){
             // 如果已经做好了path to fuel station就不需要重新路径规划
-            if(this.planner.getGoals().isEmpty()){
+            if(this.planner.getGoals().isEmpty() && this.getAllPosition == true){
                 addGoalsForFuelStation();
             }else{ //如果找到了fuelstation就移走这个目标以免重复
                 if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {

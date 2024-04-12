@@ -31,6 +31,7 @@ public class MyMemory extends TWAgentWorkingMemory {
 	protected HashMap<Class<?>, TWEntity> closestInSensorRange;
 	static protected List<Int2D> spiral = new NeighbourSpiral(Parameters.defaultSensorRange * 4).spiral();
 	protected List<TWAgent> neighbouringAgents = new ArrayList<TWAgent>();
+	private Int2D [] agentPos = new Int2D[5];
 
 	protected Int2D fuelStation;
 	
@@ -418,6 +419,18 @@ public class MyMemory extends TWAgentWorkingMemory {
 		return (TWHole) this.getNearbyObject(x, y, threshold, TWHole.class);
 	}
 	
+
+	public void updateAgentPosition(int index, Int2D pos) {
+		this.agentPos[index] = pos;
+	}
+
+	public Int2D[] getAgentPositionAll() {
+		return this.agentPos;
+	}
+
+	public Int2D getAgentPosition(int index){
+		return this.agentPos[index];
+	}
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
