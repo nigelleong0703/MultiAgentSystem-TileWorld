@@ -32,6 +32,7 @@ public class MyMemory extends TWAgentWorkingMemory {
 	static protected List<Int2D> spiral = new NeighbourSpiral(Parameters.defaultSensorRange * 4).spiral();
 	protected List<TWAgent> neighbouringAgents = new ArrayList<TWAgent>();
 	private Int2D [] agentPos = new Int2D[5];
+	protected ArrayList<TWEntity> targetGoalsList = new ArrayList<TWEntity>();
 
 	protected Int2D fuelStation;
 	
@@ -431,6 +432,36 @@ public class MyMemory extends TWAgentWorkingMemory {
 	public Int2D getAgentPosition(int index){
 		return this.agentPos[index];
 	}
+
+	// 更新大家的targetGoal(需要包含自己的？) // 现在这个不会包含自己的targetGoal
+	public void updateTargetGoal(Bag targetGoals) {
+		for (int i = 0; i < targetGoals.size(); i++){
+			TWEntity o = (TWEntity) targetGoals.get(i);
+			if(!(o instanceof TWEntity)){
+				//不是一个entity
+				continue;
+			}
+			// update it to the list
+			this.targetGoalsList.add(o);
+		}
+	}
+
+	public void removeTargetGoal(Bag completedGoal) {
+		for (int i = 0; i < completedGoal.size(); i++){
+			TWEntity o = (TWEntity) completedGoal.get(i);
+			if(!(o instanceof TWEntity)){
+				//不是一个entity
+				continue;
+			}
+			// update it to the list
+			this.targetGoalsList.remove(o);
+		}
+	}
+
+	public ArrayList<TWEntity> getTargetGoalsList() {
+		return this.targetGoalsList;
+	}
+
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub

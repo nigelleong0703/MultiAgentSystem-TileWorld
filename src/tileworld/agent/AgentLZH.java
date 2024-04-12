@@ -92,12 +92,34 @@ public class AgentLZH extends TWAgent {
         // 油站位置
         System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
+
+        // 先filter object，先从this.planner.getgoal()读出坐标上是不是tile and hole, 需要把是goal的Tile和Hole过滤掉
+        // 从sensedobject中过滤掉goal的Tile和Hole
+        // for (Object o : sensedObjects) {
+        //     TWEntity entity = (TWEntity) o;
+        //     if (entity instanceof TWTile) {
+        //         if (this.planner.getGoals().contains(new Int2D(entity.getX(), entity.getY()))) {
+        //             // 如果这个entity是goal,需要把他从sensedobject中删除
+        //             sensedObjects.remove(entity);
+        //         }
+        //     }
+        //     if (entity instanceof TWHole) {
+        //         if (this.planner.getGoals().contains(new Int2D(entity.getX(), entity.getY()))) {
+        //             // 如果这个entity是goal,需要把他从sensedobject中删除
+        //             sensedObjects.remove(entity);   
+        //         }
+        //     }
+        // }
+
         // sensedObjects位置和自身位置
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
         System.out.println(message);
+
         // 发到environment
         this.getEnvironment().receiveMessage(message);
     }
+
+    
 
     private ArrayList<TWEntity> detectObjectNoCollision(PriorityQueue<TWEntity> neighborObjects, List<TWAgent> neighbouringAgents) {
         // TODO Auto-generated method stub
@@ -304,6 +326,55 @@ public class AgentLZH extends TWAgent {
             return null;
         }
     }
+
+    // 对比然后增加进去goal里面
+    private void compareAndSetTarget(TWEntity target){
+        // 判断每个人的距离，如果有人比我更近，就不要去了
+        for (TWAgent agent : this.memory.neighbouringAgents){
+            if (agent.getDistanceTo(target) < this.getDistanceTo(target)){
+                return;
+            }
+        }
+        // 如果没有人比我更近，就把这个target加进我的planner里面, 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
+        if (!this.memory.getTargetGoalsList().contains(target)){
+            this.planner.getGoals().add(new Int2D(target.getX(), target.getY()));
+            // 把target转换成bag, 消息broadcast出去
+            Bag targetGoal = new Bag();
+            targetGoal.add(target);
+            MyMessage message = new MyMessage(this.getName(), "");
+            message.addTargetGoal(targetGoal);
+            this.getEnvironment().receiveMessage(message);
+        }
+    }
+
+    private void compareAndSetTarget(TWEntity target, int index){
+        // 判断每个人的距离，如果有人比我更近，就不要去了
+        for (TWAgent agent : this.memory.neighbouringAgents){
+            if (agent.getDistanceTo(target) < this.getDistanceTo(target)){
+                return;
+            }
+        }
+        // 如果没有人比我更近，就把这个target加进我的planner里面, 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
+        if (!this.memory.getTargetGoalsList().contains(target)){
+            this.planner.getGoals().add(index, new Int2D(target.getX(), target.getY()));
+            // 把target转换成bag, 消息broadcast出去
+            Bag targetGoal = new Bag();
+            targetGoal.add(target);
+            MyMessage message = new MyMessage(this.getName(), "");
+            message.addTargetGoal(targetGoal);
+            this.getEnvironment().receiveMessage(message);
+        }
+    }
+
+    private void sendCompletedGoal(TWEntity completedGoalEntity){
+        // Convert the completed goal to a bag
+        Bag completedGoal = new Bag();
+        completedGoal.add(completedGoalEntity);
+        // Send the completed goal to the environment
+        MyMessage message = new MyMessage(this.getName(), "");
+        message.addCompletedGoal(completedGoal);
+        this.getEnvironment().receiveMessage(message);
+    }
     
     @Override
     protected TWThought think() {
@@ -320,6 +391,12 @@ public class AgentLZH extends TWAgent {
             Bag sharedObjects = myMessage.getSensedObjects();
             //从消息获得agent位置
             Int2D agentPosition = myMessage.getAgentPosition();
+
+            // 从消息得出别人的targetGoal
+            Bag targetGoal = myMessage.getTargetGoal();
+    
+            // 从消息得出别人已经完成了什么Goal
+            Bag completedGoal = myMessage.getCompletedGoal();
 
             // 记录每个agent的初始位置， 用于确定搜索区域
             String numberOnly = message.getFrom().replaceAll("[^\\d]", "");
@@ -352,6 +429,17 @@ public class AgentLZH extends TWAgent {
             if (sharedObjects != null) {
                 this.memory.mergeMemory(sharedObjects, agentPosition);
             }
+
+            // 更新大家的targetGoal
+            if (targetGoal != null){
+                this.memory.updateTargetGoal(targetGoal);
+            }
+
+            // 从大家的CompletedGoal去更新整体的targetGoal
+            if (completedGoal != null){
+                this.memory.removeTargetGoal(completedGoal);
+            }
+
         }
 
         // 根据agent内存中获取附近的对象，并使用优先级队列按照它们与agent的距离进行排序
@@ -478,7 +566,7 @@ public class AgentLZH extends TWAgent {
             }
             // 如果完全没有tile
             else{
-                // mmemory里有目标tile吗？
+                // memory里有目标tile吗？
                 if (targettile != null) { // this one can check for conflict with other agents
                     mode = Mode.COLLECT;
                     System.out.println("Setting mode to collect");
@@ -504,10 +592,12 @@ public class AgentLZH extends TWAgent {
         }
         else if (curLocObject instanceof TWHole && this.getEnvironment().canPutdownTile((TWHole)curLocObject,this) && this.hasTile()){
             System.out.println("Filling Hole");
+            this.sendCompletedGoal((TWHole)curLocObject);
             return new TWThought(TWAction.PUTDOWN, null);
         }
         else if (curLocObject instanceof TWTile && this.getEnvironment().canPickupTile((TWTile)curLocObject, this) && this.carriedTiles.size()<3){
             System.out.println("Picking up Tile");
+            this.sendCompletedGoal((TWTile)curLocObject);
             return new TWThought(TWAction.PICKUP, null);
         }
         ///////////////////////////////////////////////////////////
@@ -539,29 +629,41 @@ public class AgentLZH extends TWAgent {
                         if (this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
                             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                             if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                                planner.getGoals().add(0, new Int2D(targettile.getX(), targettile.getY()));
+                                if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
+                                    // planner.getGoals().add(0, new Int2D(targettile.getX(), targettile.getY()));
+                                    // this.broadcastRemoveItem(targettile);
+                                    this.compareAndSetTarget(targettile, index=0);
+                                }
                             }
                         }
                         // 如果hole更近
                         else{
                             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                             if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                                planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
+                                if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
+                                //     planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
+                                //     this.broadcastRemoveItem(targethole);
+                                    this.compareAndSetTarget(targethole, index=0);
+                                }
                             }
                         }
                     }
                     // 如果只有目标tile
-                    else if(targettile!=null){
+                    else if(targettile!=null && this.carriedTiles.size()<3){
                         //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                         if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                            planner.getGoals().add(0, new Int2D(targettile.getX(), targettile.getY()));
+                            if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
+                                this.compareAndSetTarget(targettile, index=0);
+                            }
                         }
                     }
                     // 如果只有目标hole
-                    else if(targethole!=null){
+                    else if(targethole!=null && this.carriedTiles.size()>0){
                         //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                         if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                            planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
+                            if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
+                                this.compareAndSetTarget(targethole, index=0);
+                            }
                         }
                     }
                     // 什么都没有就不用做extra
@@ -579,13 +681,13 @@ public class AgentLZH extends TWAgent {
                 planner.getGoals().add(memory.getFuelStation());
             }
             else if(mode == Mode.FILL){
-                planner.getGoals().add(new Int2D(targethole.getX(), targethole.getY()));
+                this.compareAndSetTarget(targethole);
             }
             else if (mode == Mode.WAIT){
                 return new TWThought(TWAction.MOVE, TWDirection.Z);
             }
             else if (mode == Mode.COLLECT){
-                planner.getGoals().add(new Int2D(targettile.getX(), targettile.getY()));
+                this.compareAndSetTarget(targettile);
             }
             else if (mode == Mode.EXPLORE){
                 return RandomMoveThought();
@@ -631,12 +733,14 @@ public class AgentLZH extends TWAgent {
                 case PICKUP:
                     TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
                     pickUpTile(tile);
-                    planner.getGoals().clear();
+                    // planner.getGoals().clear();
+                    planner.getGoals().remove(new Int2D(this.x, this.y));
                     break;
                 case PUTDOWN:
                     TWHole hole = (TWHole) memory.getMemoryGrid().get(this.x, this.y);
                     putTileInHole(hole);
-                    planner.getGoals().clear();
+                    // planner.getGoals().clear();
+                    planner.getGoals().remove(new Int2D(this.x, this.y));
                     break;
                 case REFUEL:
                     refuel();
