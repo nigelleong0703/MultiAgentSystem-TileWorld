@@ -45,12 +45,8 @@ public abstract class TWAgent extends TWEntity implements Steppable {
         this.fuelLevel = fuelLevel;
         this.carriedTiles = new ArrayList<TWTile>();
         this.sensor = new TWAgentSensor(this, Parameters.defaultSensorRange);
-<<<<<<< HEAD
         this.memory = new TWAgentWorkingMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
-=======
-        // this.memory = new TWAgentWorkingMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
-        this.memory = new Memory(this, env.schedule, env.getxDimension(), env.getyDimension());
->>>>>>> 1b1fac2d95227c124c04deda251bdcbcfc54aa3d
+        // this.memory = new Memory(this, env.schedule, env.getxDimension(), env.getyDimension());
     }
     /**
      * Fuel level, automatically decremented once per move.

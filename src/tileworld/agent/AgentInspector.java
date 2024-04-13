@@ -17,11 +17,7 @@ import sim.engine.SimState;
 import sim.field.grid.ObjectGrid2D;
 import sim.portrayal.Inspector;
 import sim.portrayal.LocationWrapper;
-<<<<<<< HEAD
- 
-=======
 
->>>>>>> 1b1fac2d95227c124c04deda251bdcbcfc54aa3d
 /**
  * AgentInspector
  *
