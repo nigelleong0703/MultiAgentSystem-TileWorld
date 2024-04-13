@@ -33,15 +33,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
-
-import tileworld.agent.HungarianAlgorithm;
-
-
 
 public class AgentLZH extends TWAgent {
     private String name;
@@ -58,12 +55,16 @@ public class AgentLZH extends TWAgent {
     private TWPlannerLZH planner;
     private MyMemory memory;
     // private TWAgentSensor sensor;
-    private boolean getAllPosition = false;
+    public boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
     private double RepulsiveConstant = 1;
     private int repulsionRange = 20;
-    Deque<TWDirection> recentMoves = new ArrayDeque<>();
-    private int recentWindowHistoryLength = 10;
+    Deque<Int2D> recentPosition = new LinkedList<>();
+    private int recentWindowHistoryLength = 15;
+    private int sourceAttraction = 3;
+    private Int2D sourceAttractionPoint = null;
+    private double RecentRange = 20.0;
+    private double recentConstant = 1;
 
     public AgentLZH(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
@@ -239,7 +240,21 @@ public class AgentLZH extends TWAgent {
         }
     }
 
-
+    private void applySource(int x, int y, Int2D sourceAttraction, Map<TWDirection, Double> scores){
+        // 根据自身的位置和需要到达的sourceAttraction的位置，计算出每个方向的score
+        ArrayList<TWDirection> directionToSource = getDirectionFromPositions(x, y, sourceAttraction.x, sourceAttraction.y);
+        for (TWDirection dir : directionToSource){
+            if (scores.containsKey(dir)){
+                // 如果是E,W 算Attraction就用x, 如果是N,S 算Attraction就用y
+                if (dir == TWDirection.E || dir == TWDirection.W){
+                    scores.put(dir, scores.get(dir) +  this.sourceAttraction * Math.abs(x - sourceAttraction.x));
+                }
+                else{
+                    scores.put(dir, scores.get(dir) +  this.sourceAttraction * Math.abs(y - sourceAttraction.y));
+                }
+            }
+        }
+    }
 
     private void applyRepulsion(int x, int y, Map<TWDirection, Double> scores){
         Int2D [] allAgentPosition = this.memory.getAgentPositionAll();
@@ -265,20 +280,38 @@ public class AgentLZH extends TWAgent {
 
     private void applyRepulsionAndHistory(int x, int y, Map<TWDirection, Double> scores) {
         applyRepulsion(x, y, scores);
-        updateDirectionScoresWithHistory(scores, 1);  // Apply a penalty of 1 for recent moves
+        updateDirectionScoresWithHistory(scores);  // Apply a penalty of 1 for recent moves
     }
 
-    private void updateDirectionScoresWithHistory(Map<TWDirection, Double> scores, int penalty) {
-        for (TWDirection dir : recentMoves) {
-            if (scores.containsKey(dir)) {
-                scores.put(dir, scores.get(dir) - penalty);  // Apply a penalty to recent directions
+    private double calculateHistoryPenalty(Int2D newPosition){
+        double penalty = 0.0;
+        for (Int2D historyPosition : recentPosition) {
+            double distance = Math.sqrt(Math.pow(newPosition.x - historyPosition.x, 2) +
+                                        Math.pow(newPosition.y - historyPosition.y, 2));
+            if (distance < this.RecentRange) {  // Define a "proximity zone" radius
+                penalty += (this.RecentRange - distance);  // The closer it is, the higher the penalty
             }
         }
+        return penalty;
+    }
+
+    private void updateDirectionScoresWithHistory(Map<TWDirection, Double> scores) {
+        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
+            Int2D newPosition = new Int2D(this.x + entry.getKey().dx, this.y+ entry.getKey().dy);
+            double penalty = calculateHistoryPenalty(newPosition);
+            scores.put(entry.getKey(), entry.getValue() - this.recentConstant * penalty);
+        }
+    }
+
+    public void updateRecentLocation(TWDirection selectedDirection){
+        if (recentPosition.size() >= this.recentWindowHistoryLength) {  // Limit to the last 5 moves
+            recentPosition.poll();  // Remove the oldest
+        }
+        recentPosition.add(getPositionAdd(new Int2D(this.x, this.y), new Int2D(selectedDirection.dx, selectedDirection.dy)));  // Add the newest
     }
 
     public ArrayList<TWDirection> getDirectionFromPositions(int x1, int y1, int x2, int y2) {
         // 对比 agent1 和agent 2的位置，范围一组方向
-        // Calculate the differences in x and y coordinates
         int dx = x2 - x1; //说明agent2 在agent 1的右边
         int dy = y2 - y1; //说明agent2 在agent 1的下边
 
@@ -313,12 +346,15 @@ public class AgentLZH extends TWAgent {
         return x < 0 || x >= this.getEnvironment().getxDimension() || y < 0 || y >= this.getEnvironment().getyDimension();
     }
 
-
     private TWThought RandomMoveThought() {
         // ArrayList<TWDirection> dirs = new ArrayList<>();
         Map<TWDirection, Double> directionScores = new HashMap<>();
         int x = this.getX();
         int y = this.getY();
+        
+        // Int2D sourceAttraction = findNearestBase(this.memory.findLowestNZone(5), this.memory.getAgentPositionAll());
+        // print out the agent name + source
+        System.out.println(this.name + " source: " + sourceAttraction);
 
         // Initialize the direction scores
         directionScores.put(TWDirection.N, 0.0);
@@ -326,6 +362,10 @@ public class AgentLZH extends TWAgent {
         directionScores.put(TWDirection.E, 0.0);
         directionScores.put(TWDirection.W, 0.0);
 
+        if (sourceAttractionPoint != null){
+            // Apply source attraction (attraction to the source point
+            applySource(x, y, sourceAttractionPoint, directionScores);
+        }
         applyRepulsionAndHistory(x, y, directionScores);
         // 调整score所以不会有负数出现
         // Find the minimum score
@@ -338,11 +378,8 @@ public class AgentLZH extends TWAgent {
         }
         if (!directionScores.isEmpty()) {
             TWDirection selectedDirection = selectDirectionWithWeights(directionScores, x, y);
-            // Update recent moves
-            if (recentMoves.size() >= this.recentWindowHistoryLength) {  // Limit to the last 5 moves
-                recentMoves.pollFirst();  // Remove the oldest
-            }
-            recentMoves.addLast(selectedDirection);  // Add the newest
+            updateRecentLocation(selectedDirection);
+
             return new TWThought(TWAction.MOVE, selectedDirection);
         } else {
             System.out.println("No where to go!");
@@ -497,6 +534,9 @@ public class AgentLZH extends TWAgent {
             // 从消息得出别人已经完成了什么Goal
             Bag completedGoal = myMessage.getCompletedGoal();
 
+            // 从消息得出sourceattraction分布
+            Int2D [] sourceAttraction = myMessage.getSourceAttraction();
+
             // 记录每个agent的初始位置， 用于确定搜索区域
             String numberOnly = message.getFrom().replaceAll("[^\\d]", "");
             int agentIndex = Integer.parseInt(numberOnly) - 1;
@@ -507,9 +547,16 @@ public class AgentLZH extends TWAgent {
                     this.updateAllInitialPosition++;
                 }
                 this.memory.updateAgentPosition(agentIndex, agentPosition);
+                // update heatmap (visitcount)
+                this.memory.recordVisit(agentPosition.getX(), agentPosition.getY());
             }
             if (this.updateAllInitialPosition == 5) {
                 this.getAllPosition = true;
+            }
+
+            // 先看sourceAttraction是不是null, 再获取自己的sourceAttraction地点
+            if (sourceAttraction != null) {
+                sourceAttractionPoint = sourceAttraction[this.index];
             }
             
             // 如果没有消息或者发送者是自己，跳过
@@ -542,7 +589,7 @@ public class AgentLZH extends TWAgent {
         }
 
         // 更新memory heatmap
-        this.memory.recordVisit(this.x, this.y);
+        // this.memory.recordVisit(this.x, this.y);
 
         // 根据agent内存中获取附近的对象，并使用优先级队列按照它们与agent的距离进行排序
         PriorityQueue<TWEntity> TilesList;
@@ -887,6 +934,7 @@ public class AgentLZH extends TWAgent {
     public TWAgentWorkingMemory getMemory() {
         return this.memory;
     }
+
 
     @Override
     public String getName() {

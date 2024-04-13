@@ -98,4 +98,13 @@ public class MyMessage extends Message{
         }
         else return null;
     }
+    public void addSourceAttraction(Int2D [] sourceAttractionList){
+        this.addMessage("sourceAttractionList", sourceAttractionList);
+    }
+    public Int2D [] getSourceAttraction(){
+        if (this.messages.containsKey("sourceAttractionList")){
+            return (Int2D []) this.messages.get("sourceAttractionList");
+        }
+        else return null;
+    }
 }

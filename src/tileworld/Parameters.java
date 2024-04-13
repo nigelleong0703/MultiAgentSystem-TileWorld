@@ -52,8 +52,8 @@ package tileworld;
 //    public static final int defaultSensorRange = 3;
 
 //    //Environment Parameters
-//    public static final int xDimension = 100; //size in cells
-//    public static final int yDimension = 100;
+//    public static final int xDimension = 80; //size in cells
+//    public static final int yDimension = 80;
 
 //    //Object Parameters
 //    // mean, dev: control the number of objects to be created in every time step (i.e. average object creation rate)

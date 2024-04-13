@@ -1,6 +1,7 @@
 package tileworld.agent;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -33,9 +34,10 @@ public class MyMemory extends TWAgentWorkingMemory {
 	protected List<TWAgent> neighbouringAgents = new ArrayList<TWAgent>();
 	private Int2D [] agentPos = new Int2D[5];
 	protected ArrayList<TWEntity> targetGoalsList = new ArrayList<TWEntity>();
-	private int[][] visitCounts;
+	private double[][] visitCounts;
     private int zoneWidth;
     private int zoneHeight;
+	private double headmapDecayfactor = 0.9;
 
 	protected Int2D fuelStation;
 	
@@ -60,7 +62,7 @@ public class MyMemory extends TWAgentWorkingMemory {
 		int[] gridSize = findOptimalGridSize(me.getEnvironment().getxDimension(), me.getEnvironment().getyDimension());
         this.zoneWidth = gridSize[0];
         this.zoneHeight = gridSize[1];
-        this.visitCounts = new int[me.getEnvironment().getxDimension() / zoneWidth][me.getEnvironment().getyDimension() / zoneHeight];
+        this.visitCounts = new double[me.getEnvironment().getxDimension() / zoneWidth][me.getEnvironment().getyDimension() / zoneHeight];
 
 		//		this.fuelStation = null;
 		// TODO Auto-generated constructor stub
@@ -210,6 +212,7 @@ public class MyMemory extends TWAgentWorkingMemory {
             }
             neighbouringAgents.add(a);
         }
+		
 	}
 	
 	public TWAgent getNeighbour(){
@@ -429,8 +432,8 @@ public class MyMemory extends TWAgentWorkingMemory {
 	}
 
 	private int[] findOptimalGridSize(int width, int height) {
-        int minCells = 16;
-        int maxCells = 64;
+        int minCells = 9;
+        int maxCells = 36;
         int optimalGridWidth = 1;
         int optimalGridHeight = 1;
         int minDifference = Integer.MAX_VALUE;
@@ -504,7 +507,7 @@ public class MyMemory extends TWAgentWorkingMemory {
         visitCounts[zoneX][zoneY]++;
     }
 
-    public int getVisitCount(int x, int y) {
+    public double getVisitCount(int x, int y) {
         int zoneX = x / zoneWidth;
         int zoneY = y / zoneHeight;
         return visitCounts[zoneX][zoneY];
@@ -517,11 +520,69 @@ public class MyMemory extends TWAgentWorkingMemory {
 	public int getZoneHeight() {
 		return this.zoneHeight;
 	}
+
+	public int getSumOfVisitCount() {
+        int sum = 0;
+        for (int i = 0; i < visitCounts.length; i++) {
+            for (int j = 0; j < visitCounts[i].length; j++) {
+                sum += visitCounts[i][j];
+            }
+        }
+        return sum;
+    }
+	
+	public Int2D[] findLowestNZone(int n){
+		List<Cell> cells = new ArrayList<>();
+		
+		// Populate the list with cells
+		for (int i = 0; i < visitCounts.length; i++) {
+			for (int j = 0; j < visitCounts[i].length; j++) {
+				cells.add(new Cell(visitCounts[i][j],new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2)));
+			}
+		}
+	
+		// Sort the cells by visit count
+		Collections.sort(cells);
+	
+		// Extract the indices of the n cells with the lowest visit counts
+		List<Int2D> lowestNCells = new ArrayList<>();
+		for (int i = 0; i < Math.min(n, cells.size()); i++) {
+			// lowestNCells.add(new int[] { cells.get(i).x, cells.get(i).y });
+			lowestNCells.add(cells.get(i).pos);
+		}
+
+		// convert datatype
+		Int2D[] result = new Int2D[lowestNCells.size()];
+		result = lowestNCells.toArray(result);
+		return result;
+	}
+
+	public void decayHeatMap(){
+		for (int i = 0; i < visitCounts.length; i++) {
+			for (int j = 0; j < visitCounts[i].length; j++) {
+				visitCounts[i][j] *= headmapDecayfactor;
+			}
+		}
+	}
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 
 	}
 	
+}
 
+class Cell implements Comparable<Cell> {
+    double visitCount;
+    Int2D pos;
+
+    Cell(double visitCounts, Int2D pos) {
+        this.visitCount = visitCounts;
+        this.pos = pos;
+    }
+
+    @Override
+    public int compareTo(Cell other) {
+        return Double.compare(this.visitCount, other.visitCount);
+    }
 }

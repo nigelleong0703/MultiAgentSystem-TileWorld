@@ -15,6 +15,7 @@ import sun.font.TrueTypeFont;
 import tileworld.Parameters;
 import tileworld.TWGUI;
 import tileworld.agent.AgentLZH;
+import tileworld.agent.AgentLZHInspector;
 import tileworld.agent.Message;
 import tileworld.agent.SimpleTWAgent;
 import tileworld.agent.TWAgent;
@@ -121,7 +122,7 @@ public class TWEnvironment extends SimState implements Steppable {
         // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos = this.generateRandomLocation();
         assert(this.isInBounds(pos.getX(), pos.getY()));
-        createAgent(new AgentLZH(0, "agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
+        createAgent(new AgentLZHInspector(0, "agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos2 = this.generateRandomLocation();
         assert(this.isInBounds(pos2.getX(), pos2.getY()));
         createAgent(new AgentLZH(1, "agent2", pos2.getX(), pos2.getY(), this, Parameters.defaultFuelLevel));
