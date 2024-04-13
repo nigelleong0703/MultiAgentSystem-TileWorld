@@ -27,12 +27,16 @@ import tileworld.agent.TWAgentSensor;
 import tileworld.agent.TWAgent;
 
 import java.util.Arrays;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.PriorityQueue;
+import java.util.Random;
 import java.util.List;
-
+import java.util.Map;
 import java.util.Scanner;
 
 import tileworld.agent.HungarianAlgorithm;
@@ -56,6 +60,10 @@ public class AgentLZH extends TWAgent {
     // private TWAgentSensor sensor;
     private boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
+    private double RepulsiveConstant = 1;
+    private int repulsionRange = 20;
+    Deque<TWDirection> recentMoves = new ArrayDeque<>();
+    private int recentWindowHistoryLength = 10;
 
     public AgentLZH(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
@@ -93,24 +101,6 @@ public class AgentLZH extends TWAgent {
         System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
 
-        // 先filter object，先从this.planner.getgoal()读出坐标上是不是tile and hole, 需要把是goal的Tile和Hole过滤掉
-        // 从sensedobject中过滤掉goal的Tile和Hole
-        // for (Object o : sensedObjects) {
-        //     TWEntity entity = (TWEntity) o;
-        //     if (entity instanceof TWTile) {
-        //         if (this.planner.getGoals().contains(new Int2D(entity.getX(), entity.getY()))) {
-        //             // 如果这个entity是goal,需要把他从sensedobject中删除
-        //             sensedObjects.remove(entity);
-        //         }
-        //     }
-        //     if (entity instanceof TWHole) {
-        //         if (this.planner.getGoals().contains(new Int2D(entity.getX(), entity.getY()))) {
-        //             // 如果这个entity是goal,需要把他从sensedobject中删除
-        //             sensedObjects.remove(entity);   
-        //         }
-        //     }
-        // }
-
         // sensedObjects位置和自身位置
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
         System.out.println(message);
@@ -124,17 +114,6 @@ public class AgentLZH extends TWAgent {
     private ArrayList<TWEntity> detectObjectNoCollision(PriorityQueue<TWEntity> neighborObjects, List<TWAgent> neighbouringAgents) {
         // TODO Auto-generated method stub
         ArrayList<TWEntity> tiles = new ArrayList<TWEntity>();
-        // while(!neighborObjects.isEmpty()) {
-        //     TWEntity tile = neighborObjects.poll();
-        //     for (int i = 0; i < neighbouringAgents.size(); i++) {
-        //         // 有其他agent离tile更近, 这个agent不是inspector
-        //         if (!(neighbouringAgents.get(i) instanceof MyInspectorAgent)
-        //                 && this.getDistanceTo(tile)/3 >= neighbouringAgents.get(i).getDistanceTo(tile)) {
-        //             continue;
-        //         }
-        //         tiles.add(tile);
-        //     }
-        // }
         for(TWEntity object: neighborObjects) {
             boolean collision = false;
             for (TWAgent agent : neighbouringAgents) {
@@ -220,8 +199,8 @@ public class AgentLZH extends TWAgent {
             // 在最后一行，如果往下走的距离会超过strip，则让中心刚刚好达到最底下的边界
             if(depth >= Parameters.yDimension/5){
                 //
-                posY= Parameters.yDimension/5 - 1;
-                depth = Parameters.yDimension/5 - 1;
+                posY= Parameters.yDimension/5 - 1- Parameters.defaultSensorRange;
+                depth = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
                 position = new Int2D(position.x, posY);
                 planner.getGoals().add(getPositionAdd(base, position));
 
@@ -246,9 +225,9 @@ public class AgentLZH extends TWAgent {
 
             //往下走一层，如果也是超过边界，则将中心刚刚好达到最底下的边界
             if(depth > Parameters.yDimension/5){
-                posY = Parameters.yDimension/5 - 1;
+                posY = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
                 posX = Parameters.defaultSensorRange;
-                depth = Parameters.yDimension/5 - 1;
+                depth = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
                 position = new Int2D(posX, posY);
                 planner.getGoals().add(getPositionAdd(base, position));
                 break;
@@ -261,38 +240,158 @@ public class AgentLZH extends TWAgent {
     }
 
 
-    // 这个也需要进行改进，这个是随机走
+
+    private void applyRepulsion(int x, int y, Map<TWDirection, Double> scores){
+        Int2D [] allAgentPosition = this.memory.getAgentPositionAll();
+        for (int i=0; i<5; i++){
+            if (i == this.index){
+                continue;
+            }
+            Int2D agent = allAgentPosition[i];
+            ArrayList<TWDirection> directionToAgent = getDirectionFromPositions(x, y, agent.x, agent.y);
+            for (TWDirection dir : directionToAgent){
+                if (scores.containsKey(dir)){
+                    // 如果是E,W 算repulsion force就用x, 如果是N,S 算repulsion force就用y
+                    if (dir == TWDirection.E || dir == TWDirection.W){
+                        scores.put(dir, scores.get(dir) -  this.RepulsiveConstant * Math.abs(x - agent.x));
+                    }
+                    else{
+                        scores.put(dir, scores.get(dir) -  this.RepulsiveConstant * Math.abs(y - agent.y));
+                    }
+                }
+            }
+        }
+    }
+
+    private void applyRepulsionAndHistory(int x, int y, Map<TWDirection, Double> scores) {
+        applyRepulsion(x, y, scores);
+        updateDirectionScoresWithHistory(scores, 1);  // Apply a penalty of 1 for recent moves
+    }
+
+    private void updateDirectionScoresWithHistory(Map<TWDirection, Double> scores, int penalty) {
+        for (TWDirection dir : recentMoves) {
+            if (scores.containsKey(dir)) {
+                scores.put(dir, scores.get(dir) - penalty);  // Apply a penalty to recent directions
+            }
+        }
+    }
+
+    public ArrayList<TWDirection> getDirectionFromPositions(int x1, int y1, int x2, int y2) {
+        // 对比 agent1 和agent 2的位置，范围一组方向
+        // Calculate the differences in x and y coordinates
+        int dx = x2 - x1; //说明agent2 在agent 1的右边
+        int dy = y2 - y1; //说明agent2 在agent 1的下边
+
+        // Repulsion 只在一个range内有效，超过了就吧either dx or dy 清0
+        if (Math.abs(dx) > this.repulsionRange){
+            dx = 0;
+        }
+        if (Math.abs(dy) > this.repulsionRange){
+            dy = 0;
+        }
+
+        // return a list of direction, to indicate the direction of the agent
+        ArrayList<TWDirection> directions = new ArrayList<TWDirection>();
+
+        // 先看是不是在右边，如果是需要在direction增加twdirection右边, E，如果不是就再看是不是在左边，如果是在左边就在direction增加twdirection左边，W，都不是就pass
+        if (dx > 0) {
+            directions.add(TWDirection.E); // East
+        } else if (dx < 0) {
+            directions.add(TWDirection.W); // West
+        }
+
+        // 再看是不是在下边，如果是需要在direction增加twdirection下边, S，如果不是就再看是不是在上边，如果是在上边就在direction增加twdirection上边，N，都不是就pass
+        if (dy > 0) {
+            directions.add(TWDirection.S); // South
+        } else if (dy < 0) {
+            directions.add(TWDirection.N); // North
+        }
+        return directions;
+    }
+
+    private boolean checkMapOutofBound(int x, int y){
+        return x < 0 || x >= this.getEnvironment().getxDimension() || y < 0 || y >= this.getEnvironment().getyDimension();
+    }
+
+
     private TWThought RandomMoveThought() {
-        ArrayList<TWDirection> dirs = new ArrayList<TWDirection>();
+        // ArrayList<TWDirection> dirs = new ArrayList<>();
+        Map<TWDirection, Double> directionScores = new HashMap<>();
         int x = this.getX();
         int y = this.getY();
 
-        if ((y-1) >= 0
-                && !this.memory.isCellBlocked(x, y-1)) {
-            dirs.add(TWDirection.N);
-        }
-        if ((y+1) < this.getEnvironment().getyDimension()
-                && !this.memory.isCellBlocked(x, y+1)) {
-            dirs.add(TWDirection.S);
-        }
-        if ((x+1) < this.getEnvironment().getxDimension()
-                && !this.memory.isCellBlocked(x+1, y)) {
-            dirs.add(TWDirection.E);
-        }
-        if ((x-1) >= 0
-                && !this.memory.isCellBlocked(x-1, y)) {
-            dirs.add(TWDirection.W);
-        }
+        // Initialize the direction scores
+        directionScores.put(TWDirection.N, 0.0);
+        directionScores.put(TWDirection.S, 0.0);
+        directionScores.put(TWDirection.E, 0.0);
+        directionScores.put(TWDirection.W, 0.0);
 
-        if (dirs.size() > 0) {
-            int random_num = this.getEnvironment().random.nextInt(dirs.size());
-            return new TWThought(TWAction.MOVE, dirs.get(random_num));
+        applyRepulsionAndHistory(x, y, directionScores);
+        // 调整score所以不会有负数出现
+        // Find the minimum score
+        double minScore = Collections.min(directionScores.values());
+        if (minScore < 0) {
+            double offset = Math.abs(minScore);
+            for (Map.Entry<TWDirection, Double> entry : directionScores.entrySet()) {
+                directionScores.put(entry.getKey(), entry.getValue() + offset);
+            }
         }
-        else {
+        if (!directionScores.isEmpty()) {
+            TWDirection selectedDirection = selectDirectionWithWeights(directionScores, x, y);
+            // Update recent moves
+            if (recentMoves.size() >= this.recentWindowHistoryLength) {  // Limit to the last 5 moves
+                recentMoves.pollFirst();  // Remove the oldest
+            }
+            recentMoves.addLast(selectedDirection);  // Add the newest
+            return new TWThought(TWAction.MOVE, selectedDirection);
+        } else {
             System.out.println("No where to go!");
             return new TWThought(TWAction.MOVE, TWDirection.Z);
         }
     }
+
+    private TWDirection selectDirectionWithWeights(Map<TWDirection, Double> scores, int x, int y) {
+        // Filter valid and non-blocked directions with non-zero scores
+        List<TWDirection> validDirections = new ArrayList<>();
+        List<Double> weights = new ArrayList<>();
+    
+        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
+            int newX = x + entry.getKey().dx;
+            int newY = y + entry.getKey().dy;
+            if (!checkMapOutofBound(newX, newY)){
+                if(!this.memory.isCellBlocked(newX, newY)){
+                    validDirections.add(entry.getKey());
+                    weights.add(entry.getValue()+1);
+                }
+            }
+        }
+    
+        // If no valid directions are available, return TWDirection.Z
+        if (validDirections.isEmpty()) {
+            System.out.println("No walkable direction available.");
+            return TWDirection.Z;
+        }
+    
+        // Normalize weights and select based on the weighted random
+        double totalWeight = weights.stream().mapToDouble(Double::doubleValue).sum();
+        if (totalWeight == 0) {
+            // If all weights are zero but we have valid directions, choose randomly among them
+            return validDirections.get(new Random().nextInt(validDirections.size()));
+        }
+    
+        double random = Math.random() * totalWeight;
+        double cumulativeWeight = 0.0;
+        for (int i = 0; i < validDirections.size(); i++) {
+            cumulativeWeight += weights.get(i);
+            if (cumulativeWeight >= random) {
+                return validDirections.get(i);
+            }
+        }
+    
+        // Fallback in case of rounding errors, should not normally be reached
+        return validDirections.get(validDirections.size() - 1);
+    }
+
 
     private Int2D generateRandomNearCell(Int2D goalPos) {
         // TODO Auto-generated method stub
@@ -441,6 +540,9 @@ public class AgentLZH extends TWAgent {
             }
 
         }
+
+        // 更新memory heatmap
+        this.memory.recordVisit(this.x, this.y);
 
         // 根据agent内存中获取附近的对象，并使用优先级队列按照它们与agent的距离进行排序
         PriorityQueue<TWEntity> TilesList;
@@ -626,7 +728,7 @@ public class AgentLZH extends TWAgent {
                     // 先看有没有有没有同时有tile and hole，如果同时有再看距离
                     if (targettile!=null && targethole!=null){
                         // 如果tile更近
-                        if (this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
+                        if (this.carriedTiles.size()<3 && this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
                             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                             if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
                                 if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
@@ -639,7 +741,8 @@ public class AgentLZH extends TWAgent {
                         // 如果hole更近
                         else{
                             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                            if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
+                            // 还要判断身上有没有tile
+                            if (this.carriedTiles.size()>0 && this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
                                 if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
                                 //     planner.getGoals().add(0, new Int2D(targethole.getX(), targethole.getY()));
                                 //     this.broadcastRemoveItem(targethole);
@@ -657,7 +760,7 @@ public class AgentLZH extends TWAgent {
                             }
                         }
                     }
-                    // 如果只有目标hole
+                    // 如果只有目标hole并且自己carriedTiles.size>0
                     else if(targethole!=null && this.carriedTiles.size()>0){
                         //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
                         if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
@@ -779,23 +882,6 @@ public class AgentLZH extends TWAgent {
         System.out.println("");
     }
             
-    private TWDirection getRandomDirection(){
-
-        TWDirection randomDir = TWDirection.values()[this.getEnvironment().random.nextInt(5)];
-
-        if(this.getX()>=this.getEnvironment().getxDimension() ){
-            randomDir = TWDirection.W;
-        }else if(this.getX()<=1 ){
-            randomDir = TWDirection.E;
-        }else if(this.getY()<=1 ){
-            randomDir = TWDirection.S;
-        }else if(this.getY()>=this.getEnvironment().getxDimension() ){
-            randomDir = TWDirection.N;
-        }
-
-       return randomDir;
-
-    }
 
     @Override
     public TWAgentWorkingMemory getMemory() {

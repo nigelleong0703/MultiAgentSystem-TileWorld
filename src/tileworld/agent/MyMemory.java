@@ -33,6 +33,9 @@ public class MyMemory extends TWAgentWorkingMemory {
 	protected List<TWAgent> neighbouringAgents = new ArrayList<TWAgent>();
 	private Int2D [] agentPos = new Int2D[5];
 	protected ArrayList<TWEntity> targetGoalsList = new ArrayList<TWEntity>();
+	private int[][] visitCounts;
+    private int zoneWidth;
+    private int zoneHeight;
 
 	protected Int2D fuelStation;
 	
@@ -53,8 +56,13 @@ public class MyMemory extends TWAgentWorkingMemory {
 
 		this.schedule = schedule;
 		this.memoryGrid = new ObjectGrid2D(me.getEnvironment().getxDimension(), me.getEnvironment().getyDimension());
-		
-//		this.fuelStation = null;
+
+		int[] gridSize = findOptimalGridSize(me.getEnvironment().getxDimension(), me.getEnvironment().getyDimension());
+        this.zoneWidth = gridSize[0];
+        this.zoneHeight = gridSize[1];
+        this.visitCounts = new int[me.getEnvironment().getxDimension() / zoneWidth][me.getEnvironment().getyDimension() / zoneHeight];
+
+		//		this.fuelStation = null;
 		// TODO Auto-generated constructor stub
 	}
 	public void mergeMemory(Bag sensedObjects, Int2D posAgent) {
@@ -419,6 +427,34 @@ public class MyMemory extends TWAgentWorkingMemory {
 	public TWHole getNearbyHole(int x, int y, double threshold) {
 		return (TWHole) this.getNearbyObject(x, y, threshold, TWHole.class);
 	}
+
+	private int[] findOptimalGridSize(int width, int height) {
+        int minCells = 16;
+        int maxCells = 64;
+        int optimalGridWidth = 1;
+        int optimalGridHeight = 1;
+        int minDifference = Integer.MAX_VALUE;
+
+        for (int gw = 1; gw <= width; gw++) {
+            if (width % gw == 0) {
+                for (int gh = 1; gh <= height; gh++) {
+                    if (height % gh == 0) {
+                        int numCells = (width / gw) * (height / gh);
+                        if (numCells >= minCells && numCells <= maxCells) {
+                            int difference = Math.abs(gw - gh);
+                            if (difference < minDifference) {
+                                minDifference = difference;
+                                optimalGridWidth = gw;
+                                optimalGridHeight = gh;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return new int[] {optimalGridWidth, optimalGridHeight};
+    }
 	
 
 	public void updateAgentPosition(int index, Int2D pos) {
@@ -462,6 +498,25 @@ public class MyMemory extends TWAgentWorkingMemory {
 		return this.targetGoalsList;
 	}
 
+	public void recordVisit(int x, int y) {
+        int zoneX = x / zoneWidth;
+        int zoneY = y / zoneHeight;
+        visitCounts[zoneX][zoneY]++;
+    }
+
+    public int getVisitCount(int x, int y) {
+        int zoneX = x / zoneWidth;
+        int zoneY = y / zoneHeight;
+        return visitCounts[zoneX][zoneY];
+    }
+
+	public int getZoneWidth() {
+		return this.zoneWidth;
+	}
+
+	public int getZoneHeight() {
+		return this.zoneHeight;
+	}
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
