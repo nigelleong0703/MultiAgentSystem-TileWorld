@@ -531,13 +531,61 @@ public class MyMemory extends TWAgentWorkingMemory {
         return sum;
     }
 	
+	private double calculateDistance(Int2D point1, Int2D point2) {
+	    // Euclidean distance
+	    return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+	}
+	
+	
+	private List<Int2D> selectFarthestZones(List<Int2D> candidates, int numberToSelect) {
+	    List<Int2D> selected = new ArrayList<>();
+	    if (!candidates.isEmpty()) {
+	        // Start by selecting the first candidate (arbitrary choice)
+	        selected.add(candidates.get(0));
+
+	        while (selected.size() < numberToSelect && selected.size() < candidates.size()) {
+	            Int2D farthest = null;
+	            double maxDistance = 0;
+
+	            // Find the candidate farthest from any already selected
+	            for (Int2D candidate : candidates) {
+	                double minDistanceToSelected = Double.MAX_VALUE;
+	                for (Int2D sel : selected) {
+	                    double distance = calculateDistance(candidate, sel);
+	                    minDistanceToSelected = Math.min(minDistanceToSelected, distance);
+	                }
+
+	                if (minDistanceToSelected > maxDistance) {
+	                    maxDistance = minDistanceToSelected;
+	                    farthest = candidate;
+	                }
+	            }
+
+	            if (farthest != null) {
+	                selected.add(farthest);
+	            }
+	        }
+	    }
+	    return selected;
+	}
+	
 	public Int2D[] findLowestNZone(int n){
 		List<Cell> cells = new ArrayList<>();
+		Int2D referencePoint = this.fuelStation;
 		
 		// Populate the list with cells
 		for (int i = 0; i < visitCounts.length; i++) {
 			for (int j = 0; j < visitCounts[i].length; j++) {
-				cells.add(new Cell(visitCounts[i][j],new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2)));
+				Int2D center = new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2);
+				if (referencePoint != null) {
+					if (calculateDistance(center, referencePoint) <= 50.0) {
+		                cells.add(new Cell(visitCounts[i][j], center));
+		            }
+				}
+				else {
+					cells.add(new Cell(visitCounts[i][j],new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2)));
+				}
+//				cells.add(new Cell(visitCounts[i][j],new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2)));
 			}
 		}
 	
@@ -545,16 +593,19 @@ public class MyMemory extends TWAgentWorkingMemory {
 		Collections.sort(cells);
 	
 		// Extract the indices of the n cells with the lowest visit counts
-		List<Int2D> lowestNCells = new ArrayList<>();
-		for (int i = 0; i < Math.min(n, cells.size()); i++) {
+		List<Int2D> initialSelection = new ArrayList<>();
+		for (int i = 0; i < Math.min(n+5, cells.size()); i++) {
 			// lowestNCells.add(new int[] { cells.get(i).x, cells.get(i).y });
-			lowestNCells.add(cells.get(i).pos);
+			initialSelection.add(cells.get(i).pos);
 		}
+		
+		// Now select the 5 that are farthest from each other
+	    List<Int2D> finalSelection = selectFarthestZones(initialSelection, n);
 
-		// convert datatype
-		Int2D[] result = new Int2D[lowestNCells.size()];
-		result = lowestNCells.toArray(result);
-		return result;
+	    // Convert to array
+	    Int2D[] result = new Int2D[finalSelection.size()];
+	    return finalSelection.toArray(result);
+
 	}
 
 	public void decayHeatMap(){
@@ -563,6 +614,14 @@ public class MyMemory extends TWAgentWorkingMemory {
 				visitCounts[i][j] *= headmapDecayfactor;
 			}
 		}
+	}
+
+	//get object from memory
+	public TWObject getObject(int x, int y){
+		if (objects[x][y] != null) {
+			return (TWObject) objects[x][y].getO();
+		}
+		return null;
 	}
 	
 	public static void main(String[] args) {

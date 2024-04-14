@@ -57,7 +57,7 @@ public class AgentLZH extends TWAgent {
     // private TWAgentSensor sensor;
     public boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
-    private double RepulsiveConstant = 1;
+    private double RepulsiveConstant = 2;
     private int repulsionRange = 20;
     Deque<Int2D> recentPosition = new LinkedList<>();
     private int recentWindowHistoryLength = 20;
@@ -408,7 +408,7 @@ public class AgentLZH extends TWAgent {
             System.out.println("No walkable direction available.");
             return TWDirection.Z;
         }
-    
+     
         // Normalize weights and select based on the weighted random
         double totalWeight = weights.stream().mapToDouble(Double::doubleValue).sum();
         if (totalWeight == 0) {
@@ -417,6 +417,7 @@ public class AgentLZH extends TWAgent {
         }
     
         double random = Math.random() * totalWeight;
+//        double random = totalWeight;
         double cumulativeWeight = 0.0;
         for (int i = 0; i < validDirections.size(); i++) {
             cumulativeWeight += weights.get(i);
@@ -479,7 +480,6 @@ public class AgentLZH extends TWAgent {
             targetGoal.add(target);
             MyMessage message = new MyMessage(this.getName(), "");
             message.addTargetGoal(targetGoal);
-            this.getEnvironment().receiveMessage(message);
         }
     }
 
@@ -510,6 +510,27 @@ public class AgentLZH extends TWAgent {
         MyMessage message = new MyMessage(this.getName(), "");
         message.addCompletedGoal(completedGoal);
         this.getEnvironment().receiveMessage(message);
+    }
+
+    private void FindFuelAddGoal(double verysafeFuelThreshold, TWTile targettile, TWHole targethole){
+        // 先检查有没有targettile和targethole, 如果有，就要检查自己和这些东西的距离是不是在我的sensorrange范围里面， 不是直接skip
+        if (targettile != null && this.getDistanceTo(targettile) > Parameters.defaultSensorRange){
+            targettile = null;
+        }
+        if (targethole != null && this.getDistanceTo(targethole) > Parameters.defaultSensorRange){
+            targethole = null;
+        }
+        addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
+
+        // 这边要看我的goal()的第一个位置是不是eitherr tile or hole, 如果是就要在这个goal后面插进去我现在的位置， 但是有可能是targettile或者targethole是null, 要先检查
+        if (this.planner.getGoals().size() > 0){
+            // 从planner.goal读出第一个goal 的Int2D
+            TWObject firstGoal = this.memory.getObject(this.planner.getGoals().get(0).x, this.planner.getGoals().get(0).y);
+
+            if (firstGoal instanceof TWTile || firstGoal instanceof TWHole){
+                this.planner.getGoals().add(1, new Int2D(this.x, this.y));
+            }
+        }
     }
 
     private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile, TWHole targethole){
@@ -655,17 +676,17 @@ public class AgentLZH extends TWAgent {
 
         TilesList = this.memory.getNearbyAllSortedObjects(x, y, 50, TWTile.class);
         HolesList = this.memory.getNearbyAllSortedObjects(x, y, 50, TWHole.class);
-        TWEntity FuelStation = this.memory.getNearbyObject(x,y,200,TWFuelStation.class);
-        if(FuelStation != null){
-            System.out.println("Fuel Station Found"); 
-            Scanner scanner = new Scanner(System.in);
-            System.out.println("Press any key to continue...");
-            // Wait for user input
-            scanner.nextLine();
-
-            System.out.println("Resuming execution.");
-            scanner.close();
-        }
+        // TWEntity FuelStation = this.memory.getNearbyObject(x,y,200,TWFuelStation.class);
+//        if(FuelStation != null){
+//            System.out.println("Fuel Station Found"); 
+//            Scanner scanner = new Scanner(System.in);
+//            System.out.println("Press any key to continue...");
+//            // Wait for user input
+//            scanner.nextLine();
+//
+//            System.out.println("Resuming execution.");
+//            scanner.close();
+//        }
         // TWObject getNearbyObject(int sx, int sy, double threshold, Class<?> type) 
 
         TWTile targettile = null;
@@ -698,6 +719,12 @@ public class AgentLZH extends TWAgent {
         // TO DO:
         // 逻辑思路 现决定模式，再决定Thought
         // mode = Mode.EXPLORE;
+//        先检测是不是刚找到加油站/别人找到了但是自己还在找
+//        if(memory.getFuelStation() == null && mode==Mode.FIND_FUELSTATION) {
+        if (mode==Mode.FIND_FUELSTATION && memory.getFuelStation()!= null){
+        	mode = Mode.EXPLORE;
+        }
+        
         if (memory.getFuelStation() == null) {
             if (this.getFuelLevel() > this.fuelThreshold) {
                 mode = Mode.FIND_FUELSTATION;
@@ -709,9 +736,8 @@ public class AgentLZH extends TWAgent {
             }
         }
         // 如果找到了油站，而且自己要没有油了，就去加油
-        // else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < this.fuelThreshold || this.getFuelLevel() < 1.2 * this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
         // 这边可以设置一个动态阈值
-        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < 2.5 * this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
+        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < 2.5* this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
             mode = Mode.REFUEL;
             System.out.println("Setting mode to refuel");
         }
@@ -790,7 +816,7 @@ public class AgentLZH extends TWAgent {
         // 如果不是空地，那就是到达了goal或者碰巧经过goal
         ///////////////////////////////////////////////////////////
         // 如果刚好经过加油站，而且剩下的有少过max的75%，就加油
-        if (curLocObject instanceof TWFuelStation && (this.getFuelLevel() < (0.65 * Parameters.defaultFuelLevel))){
+        if (curLocObject instanceof TWFuelStation && (this.getFuelLevel() < (0.7 * Parameters.defaultFuelLevel))){
             // System.out.println("Current Location is Fuel Station");
             System.out.println("Now Adding Fuel");
             // 加了油就要变成explore
@@ -819,60 +845,10 @@ public class AgentLZH extends TWAgent {
             }else{ 
                 // 这边是已经做好了寻找加油站的规划
                 // 如果目前的位置在goal里面
-                double verysafeFuelThreshold = (double)this.planner.getRemainingPathLength() + 2 * this.fuelThreshold;
-                addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
-                // if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
-                //     int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
-                //     if (index != -1){ //如果找到了这个目标
-                //         ////这个需要debug一下
-                //         System.out.println(index);
-                //         planner.getGoals().remove(index);
-                //     }
-                // }
-                // // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold, 就可以做别的事情（collect or fill)
-                // else if (this.getFuelLevel() > verysafeFuelThreshold){
-                //     // 先看有没有有没有同时有tile and hole，如果同时有再看距离
-                //     if (targettile!=null && targethole!=null){
-                //         // 如果tile更近
-                //         if (this.carriedTiles.size()<3 && this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
-                //             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                //             if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                //                 if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
-                //                     this.compareAndSetTarget(targettile, index=0);
-                //                 }
-                //             }
-                //         }
-                //         // 如果hole更近
-                //         else{
-                //             //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                //             // 还要判断身上有没有tile
-                //             if (this.carriedTiles.size()>0 && this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                //                 if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
-                //                     this.compareAndSetTarget(targethole, index=0);
-                //                 }
-                //             }
-                //         }
-                //     }
-                //     // 如果只有目标tile
-                //     else if(targettile!=null && this.carriedTiles.size()<3){
-                //         //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                //         if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                //             if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
-                //                 this.compareAndSetTarget(targettile, index=0);
-                //             }
-                //         }
-                //     }
-                //     // 如果只有目标hole并且自己carriedTiles.size>0
-                //     else if(targethole!=null && this.carriedTiles.size()>0){
-                //         //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                //         if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                //             if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
-                //                 this.compareAndSetTarget(targethole, index=0);
-                //             }
-                //         }
-                //     }
-                //     // 什么都没有就不用做extra
-                // }
+                double verysafeFuelThreshold = (double)this.planner.getRemainingPathLength() + 2.5 * this.fuelThreshold;
+                // 如果走的太远，会导致有些搜索区域没有被搜索到，因此要限制他去拿东西的区域
+                
+                FindFuelAddGoal(verysafeFuelThreshold, targettile, targethole);
             }
 
             for (int i = 0; i<planner.getGoals().size();i++){
@@ -935,7 +911,15 @@ public class AgentLZH extends TWAgent {
             switch (thought.getAction()) {
                 case MOVE:
 //				System.out.println("Direction:" + thought.getDirection());
-                    move(thought.getDirection());
+                    // 不太清楚为什么会out of bound, 检测如果会的话，就随机一个方向
+                    if (this.x + thought.getDirection().dx < 0 || this.x + thought.getDirection().dx >= this.getEnvironment().getxDimension() || this.y + thought.getDirection().dy < 0 || this.y + thought.getDirection().dy >= this.getEnvironment().getyDimension()) {
+                        System.out.println("Out of bound");
+                        //随机的方向也不可以outoufbound, 我没有random的function
+                        move(RandomMoveThought().getDirection());
+                    }
+                    else{
+                        move(thought.getDirection());
+                    }
                     break;
                 case PICKUP:
                     TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
