@@ -319,144 +319,215 @@ public class AgentFZM extends TWAgent {
         return validPositions.get(new Random().nextInt(validPositions.size()));
     }
 
-    // 对比然后增加进去goal里面
+    // // 对比然后增加进去goal里面
+    // private void compareAndSetTarget(TWEntity target) {
+    // // 判断每个人的距离，如果有人比我更近，就不要去了
+    // for (TWAgent agent : this.memory.neighbouringAgents) {
+    // if (agent.getDistanceTo(target) < this.getDistanceTo(target)) {
+    // return;
+    // }
+    // }
+    // // 如果没有人比我更近，就把这个target加进我的planner里面,
+    // // 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
+    // if (!this.memory.getTargetGoalsList().contains(target)) {
+    // this.planner.getGoals().add(new Int2D(target.getX(), target.getY()));
+    // // 把target转换成bag, 消息broadcast出去
+    // Bag targetGoal = new Bag();
+    // targetGoal.add(target);
+    // MyMessage message = new MyMessage(this.getName(), "");
+    // message.addTargetGoal(targetGoal);
+    // }
+    // }
+
+    // private void compareAndSetTarget(TWEntity target, int index) {
+    // // 判断每个人的距离，如果有人比我更近，就不要去了
+    // for (TWAgent agent : this.memory.neighbouringAgents) {
+    // if (agent.getDistanceTo(target) < this.getDistanceTo(target)) {
+    // return;
+    // }
+    // }
+    // // 如果没有人比我更近，就把这个target加进我的planner里面,
+    // // 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
+    // if (!this.memory.getTargetGoalsList().contains(target)) {
+    // this.planner.getGoals().add(index, new Int2D(target.getX(), target.getY()));
+    // // 把target转换成bag, 消息broadcast出去
+    // Bag targetGoal = new Bag();
+    // targetGoal.add(target);
+    // MyMessage message = new MyMessage(this.getName(), "");
+    // message.addTargetGoal(targetGoal);
+    // this.getEnvironment().receiveMessage(message);
+    // }
+    // }
+
+    // private void sendCompletedGoal(TWEntity completedGoalEntity) {
+    // // Convert the completed goal to a bag
+    // Bag completedGoal = new Bag();
+    // completedGoal.add(completedGoalEntity);
+    // // Send the completed goal to the environment
+    // MyMessage message = new MyMessage(this.getName(), "");
+    // message.addCompletedGoal(completedGoal);
+    // this.getEnvironment().receiveMessage(message);
+    // }
+
+    // private void FindFuelAddGoal(double verysafeFuelThreshold, TWTile targettile,
+    // TWHole targethole) {
+    // // 先检查有没有targettile和targethole, 如果有，就要检查自己和这些东西的距离是不是在我的sensorrange范围里面，
+    // // 不是直接skip
+    // if (targettile != null && this.getDistanceTo(targettile) >
+    // Parameters.defaultSensorRange) {
+    // targettile = null;
+    // }
+    // if (targethole != null && this.getDistanceTo(targethole) >
+    // Parameters.defaultSensorRange) {
+    // targethole = null;
+    // }
+    // addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
+
+    // // 这边要看我的goal()的第一个位置是不是eitherr tile or hole, 如果是就要在这个goal后面插进去我现在的位置，
+    // // 但是有可能是targettile或者targethole是null, 要先检查
+    // if (this.planner.getGoals().size() > 0) {
+    // // 从planner.goal读出第一个goal 的Int2D
+    // TWObject firstGoal = this.memory.getObject(this.planner.getGoals().get(0).x,
+    // this.planner.getGoals().get(0).y);
+
+    // if (firstGoal instanceof TWTile || firstGoal instanceof TWHole) {
+    // this.planner.getGoals().add(1, new Int2D(this.x, this.y));
+    // }
+    // }
+    // }
+
+    // private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile,
+    // TWHole targethole) {
+
+    // if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
+    // int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
+    // if (index != -1) { // 如果找到了这个目标
+    // //// 这个需要debug一下
+    // System.out.println(index);
+    // planner.getGoals().remove(index);
+    // }
+    // }
+    // // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold,
+    // // 就可以做别的事情（collect or fill)
+    // else if (this.getFuelLevel() > verysafeFuelThreshold) {
+    // // 先看有没有有没有同时有tile and hole，如果同时有再看距离
+    // if (targettile != null && targethole != null) {
+    // // 如果tile更近
+    // if (this.carriedTiles.size() < 3 && this.getDistanceTo(targettile.getX(),
+    // targettile.getY()) < this
+    // .getDistanceTo(targethole.getX(), targethole.getY())) {
+    // // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+    // if (this.getDistanceTo(targettile.getX(), targettile.getY()) +
+    // verysafeFuelThreshold < this
+    // .getFuelLevel()) {
+    // if (!planner.getGoals().isEmpty()
+    // && !this.planner.getGoals().contains(new Int2D(targettile.getX(),
+    // targettile.getY()))) {
+    // this.compareAndSetTarget(targettile, index = 0);
+    // }
+    // }
+    // }
+    // // 如果hole更近
+    // else {
+    // // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+    // // 还要判断身上有没有tile
+    // if (this.carriedTiles.size() > 0 && this.getDistanceTo(targethole.getX(),
+    // targethole.getY())
+    // + verysafeFuelThreshold < this.getFuelLevel()) {
+    // if (!planner.getGoals().isEmpty()
+    // && !this.planner.getGoals().contains(new Int2D(targethole.getX(),
+    // targethole.getY()))) {
+    // this.compareAndSetTarget(targethole, index = 0);
+    // }
+    // }
+    // }
+    // }
+    // // 如果只有目标tile
+    // else if (targettile != null && this.carriedTiles.size() < 3) {
+    // // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+    // if (this.getDistanceTo(targettile.getX(), targettile.getY()) +
+    // verysafeFuelThreshold < this
+    // .getFuelLevel()) {
+    // if (!planner.getGoals().isEmpty()
+    // && !this.planner.getGoals().contains(new Int2D(targettile.getX(),
+    // targettile.getY()))) {
+    // this.compareAndSetTarget(targettile, index = 0);
+    // }
+    // }
+    // }
+    // // 如果只有目标hole并且自己carriedTiles.size>0
+    // else if (targethole != null && this.carriedTiles.size() > 0) {
+    // // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
+    // if (this.getDistanceTo(targethole.getX(), targethole.getY()) +
+    // verysafeFuelThreshold < this
+    // .getFuelLevel()) {
+    // if (!planner.getGoals().isEmpty()
+    // && !this.planner.getGoals().contains(new Int2D(targethole.getX(),
+    // targethole.getY()))) {
+    // this.compareAndSetTarget(targethole, index = 0);
+    // }
+    // }
+    // }
+    // // 什么都没有就不用做extra
+    // }
+    // }
+
     private void compareAndSetTarget(TWEntity target) {
-        // 判断每个人的距离，如果有人比我更近，就不要去了
-        for (TWAgent agent : this.memory.neighbouringAgents) {
-            if (agent.getDistanceTo(target) < this.getDistanceTo(target)) {
-                return;
-            }
+        // Early exit if a closer agent is present or the target is already in the goals
+        // list.
+        if (isAnyAgentCloser(target) || this.memory.getTargetGoalsList().contains(target)) {
+            return;
         }
-        // 如果没有人比我更近，就把这个target加进我的planner里面,
-        // 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
-        if (!this.memory.getTargetGoalsList().contains(target)) {
-            this.planner.getGoals().add(new Int2D(target.getX(), target.getY()));
-            // 把target转换成bag, 消息broadcast出去
-            Bag targetGoal = new Bag();
-            targetGoal.add(target);
-            MyMessage message = new MyMessage(this.getName(), "");
-            message.addTargetGoal(targetGoal);
-        }
+        // Add target to goals and broadcast it.
+        this.planner.getGoals().add(new Int2D(target.getX(), target.getY()));
+        broadcastTargetGoal(target);
     }
 
-    private void compareAndSetTarget(TWEntity target, int index) {
-        // 判断每个人的距离，如果有人比我更近，就不要去了
-        for (TWAgent agent : this.memory.neighbouringAgents) {
-            if (agent.getDistanceTo(target) < this.getDistanceTo(target)) {
-                return;
-            }
-        }
-        // 如果没有人比我更近，就把这个target加进我的planner里面,
-        // 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
-        if (!this.memory.getTargetGoalsList().contains(target)) {
-            this.planner.getGoals().add(index, new Int2D(target.getX(), target.getY()));
-            // 把target转换成bag, 消息broadcast出去
-            Bag targetGoal = new Bag();
-            targetGoal.add(target);
-            MyMessage message = new MyMessage(this.getName(), "");
-            message.addTargetGoal(targetGoal);
-            this.getEnvironment().receiveMessage(message);
-        }
+    private boolean isAnyAgentCloser(TWEntity target) {
+        return this.memory.neighbouringAgents.stream()
+                .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+    }
+
+    private void broadcastTargetGoal(TWEntity target) {
+        Bag targetGoal = new Bag();
+        targetGoal.add(target);
+        MyMessage message = new MyMessage(this.getName(), "");
+        message.addTargetGoal(targetGoal);
+        this.getEnvironment().receiveMessage(message);
     }
 
     private void sendCompletedGoal(TWEntity completedGoalEntity) {
-        // Convert the completed goal to a bag
         Bag completedGoal = new Bag();
         completedGoal.add(completedGoalEntity);
-        // Send the completed goal to the environment
         MyMessage message = new MyMessage(this.getName(), "");
         message.addCompletedGoal(completedGoal);
         this.getEnvironment().receiveMessage(message);
     }
 
-    private void FindFuelAddGoal(double verysafeFuelThreshold, TWTile targettile, TWHole targethole) {
-        // 先检查有没有targettile和targethole, 如果有，就要检查自己和这些东西的距离是不是在我的sensorrange范围里面，
-        // 不是直接skip
-        if (targettile != null && this.getDistanceTo(targettile) > Parameters.defaultSensorRange) {
-            targettile = null;
-        }
-        if (targethole != null && this.getDistanceTo(targethole) > Parameters.defaultSensorRange) {
-            targethole = null;
-        }
-        addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
+    private void findFuelAddGoal(double verySafeFuelThreshold, TWTile targetTile, TWHole targetHole) {
+        targetTile = filterEntityByRange(targetTile, TWTile.class);
+        targetHole = filterEntityByRange(targetHole, TWHole.class);
+        addGoalInMiddle(verySafeFuelThreshold, targetTile, targetHole);
+    }
 
-        // 这边要看我的goal()的第一个位置是不是eitherr tile or hole, 如果是就要在这个goal后面插进去我现在的位置，
-        // 但是有可能是targettile或者targethole是null, 要先检查
-        if (this.planner.getGoals().size() > 0) {
-            // 从planner.goal读出第一个goal 的Int2D
-            TWObject firstGoal = this.memory.getObject(this.planner.getGoals().get(0).x,
-                    this.planner.getGoals().get(0).y);
+    private <T extends TWEntity> T filterEntityByRange(T entity, Class<T> type) {
+        if (entity != null && this.getDistanceTo(entity) <= Parameters.defaultSensorRange) {
+            return type.cast(entity);
+        }
+        return null;
+    }
 
-            if (firstGoal instanceof TWTile || firstGoal instanceof TWHole) {
-                this.planner.getGoals().add(1, new Int2D(this.x, this.y));
-            }
+    private void addGoalInMiddle(double verySafeFuelThreshold, TWTile targetTile, TWHole targetHole) {
+        if (targetTile != null && shouldAddGoal(targetTile, verySafeFuelThreshold)) {
+            this.planner.getGoals().add(0, new Int2D(targetTile.getX(), targetTile.getY()));
+        }
+        if (targetHole != null && shouldAddGoal(targetHole, verySafeFuelThreshold)) {
+            this.planner.getGoals().add(0, new Int2D(targetHole.getX(), targetHole.getY()));
         }
     }
 
-    private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile, TWHole targethole) {
-
-        if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
-            int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
-            if (index != -1) { // 如果找到了这个目标
-                //// 这个需要debug一下
-                System.out.println(index);
-                planner.getGoals().remove(index);
-            }
-        }
-        // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold,
-        // 就可以做别的事情（collect or fill)
-        else if (this.getFuelLevel() > verysafeFuelThreshold) {
-            // 先看有没有有没有同时有tile and hole，如果同时有再看距离
-            if (targettile != null && targethole != null) {
-                // 如果tile更近
-                if (this.carriedTiles.size() < 3 && this.getDistanceTo(targettile.getX(), targettile.getY()) < this
-                        .getDistanceTo(targethole.getX(), targethole.getY())) {
-                    // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this
-                            .getFuelLevel()) {
-                        if (!planner.getGoals().isEmpty()
-                                && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))) {
-                            this.compareAndSetTarget(targettile, index = 0);
-                        }
-                    }
-                }
-                // 如果hole更近
-                else {
-                    // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    // 还要判断身上有没有tile
-                    if (this.carriedTiles.size() > 0 && this.getDistanceTo(targethole.getX(), targethole.getY())
-                            + verysafeFuelThreshold < this.getFuelLevel()) {
-                        if (!planner.getGoals().isEmpty()
-                                && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))) {
-                            this.compareAndSetTarget(targethole, index = 0);
-                        }
-                    }
-                }
-            }
-            // 如果只有目标tile
-            else if (targettile != null && this.carriedTiles.size() < 3) {
-                // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this
-                        .getFuelLevel()) {
-                    if (!planner.getGoals().isEmpty()
-                            && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))) {
-                        this.compareAndSetTarget(targettile, index = 0);
-                    }
-                }
-            }
-            // 如果只有目标hole并且自己carriedTiles.size>0
-            else if (targethole != null && this.carriedTiles.size() > 0) {
-                // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this
-                        .getFuelLevel()) {
-                    if (!planner.getGoals().isEmpty()
-                            && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))) {
-                        this.compareAndSetTarget(targethole, index = 0);
-                    }
-                }
-            }
-            // 什么都没有就不用做extra
-        }
+    private boolean shouldAddGoal(TWEntity entity, double fuelThreshold) {
+        return this.getFuelLevel() > fuelThreshold + this.getDistanceTo(entity.getX(), entity.getY());
     }
 
     @Override
@@ -723,7 +794,7 @@ public class AgentFZM extends TWAgent {
                         + 2.5 * this.fuelThreshold;
                 // 如果走的太远，会导致有些搜索区域没有被搜索到，因此要限制他去拿东西的区域
 
-                FindFuelAddGoal(verysafeFuelThreshold, targettile, targethole);
+                findFuelAddGoal(verysafeFuelThreshold, targettile, targethole);
             }
 
             for (int i = 0; i < planner.getGoals().size(); i++) {
