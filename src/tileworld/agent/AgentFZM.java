@@ -1,7 +1,5 @@
 package tileworld.agent;
 
-import java.awt.Color;
-import sim.display.GUIState;
 import sim.display.Console;
 import sim.portrayal.Inspector;
 import sim.portrayal.LocationWrapper;
@@ -19,20 +17,14 @@ import tileworld.agent.*;
 import java.util.*;
 
 public class AgentFZM extends TWAgent {
-    private String name;
     private int index;
-    private final int mapsizeX = this.getEnvironment().getxDimension();
-    private final int mapsizeY = this.getEnvironment().getyDimension();
-
-    enum Mode {
-        EXPLORE, COLLECT, FILL, REFUEL, WAIT, FIND_FUELSTATION
-    }
-
-    private Mode mode;
+    private String name;
+    private final int mapWidth = this.getEnvironment().getxDimension();
+    private final int mapHeight = this.getEnvironment().getyDimension();
+    private State currentState;
     private double fuelThreshold;
     private TWPlannerLZH planner;
     private MyMemory memory;
-    // private TWAgentSensor sensor;
     public boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
     private double RepulsiveConstant = 2;
@@ -44,39 +36,19 @@ public class AgentFZM extends TWAgent {
     private double RecentRange = 20.0;
     private double recentConstant = 3;
 
+    enum State {
+        EXPLORE, COLLECT, FILL, REFUEL, WAIT, FIND_FUELSTATION
+    }
+
     public AgentFZM(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         this.index = index;
         this.name = name;
-        // fuel threshold
         this.fuelThreshold = Math.max(Parameters.xDimension, Parameters.yDimension) * 1.2;
-        // Sensor
         this.sensor = new TWAgentSensor(this, Parameters.defaultSensorRange);
-        // 路径规划
         this.planner = new TWPlannerLZH(this);
-        // Memory
-        this.memory = new MyMemory(this, env.schedule, mapsizeX, mapsizeY);
+        this.memory = new MyMemory(this, env.schedule, mapWidth, mapHeight);
 
-    }
-
-    public AgentFZM(int xpos, int ypos, TWEnvironment env, double fuelLevel) {
-        super(xpos, ypos, env, fuelLevel);
-        // this.planner = new AstarPathGenerator(this.getEnvironment(), this,
-        // mapsizeX+mapsizeY);
-        this.planner = new TWPlannerLZH(this);
-    }
-
-    // Better clarity for debugging
-    @Override
-    public Portrayal getPortrayal() {
-        return new TWAgentPortrayal(Color.pink, Parameters.defaultSensorRange) {
-
-            @Override
-            public Inspector getInspector(LocationWrapper wrapper, GUIState state) {
-                // make the inspector
-                return new AgentInspector(super.getInspector(wrapper, state), wrapper, state);
-            }
-        };
     }
 
     @Override
@@ -86,21 +58,13 @@ public class AgentFZM extends TWAgent {
         IntBag objectXCoords = new IntBag();
         IntBag objectYCoords = new IntBag();
 
-        // 从sensedobject中更新memory
         this.memory.getMemoryGrid().getNeighborsMaxDistance(x, y, Parameters.defaultSensorRange, false, sensedObjects,
                 objectXCoords, objectYCoords);
-        // System.out.print
 
-        // 发送消息位置
-        // 油站位置
         System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
-
-        // sensedObjects位置和自身位置
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
         System.out.println(message);
-
-        // 发到environment
         this.getEnvironment().receiveMessage(message);
     }
 
@@ -132,32 +96,20 @@ public class AgentFZM extends TWAgent {
 
     // 这个逻辑不是很对，需要改，这个是分层之后往回走来走去扫描
 
-    public Int2D findNearestBase(Int2D[] basePos, Int2D[] neighbouringAgents) {
-        // This function is to compare distance between agent and other agent , and
-        // determine my agent should go which starting point
-        // Int2D myagentPosition = new Int2D(this.getX(), this.getY());
-        int numAgents = 5;
-        int numBases = 5;
-        double[][] costMatrix = new double[numAgents][numBases];
+    public Int2D findNearestBase(Int2D[] bases, Int2D[] agentPositions) {
+        int agentCount = agentPositions.length;
+        int baseCount = bases.length;
+        double[][] distances = new double[agentCount][baseCount];
 
-        for (int i = 0; i < numAgents; i++) {
-            // TWAgent agent = neighbouringAgents.get(i);
-            for (int j = 0; j < numBases; j++) {
-                costMatrix[i][j] = Math.abs(neighbouringAgents[i].x - basePos[j].x)
-                        + Math.abs(neighbouringAgents[i].y - basePos[j].y);
-                // costMatrix[i][j] = agent.getDistanceTo(basePos[j].x, basePos[j].y);
+        for (int i = 0; i < agentCount; i++) {
+            for (int j = 0; j < baseCount; j++) {
+                distances[i][j] = Math.hypot(agentPositions[i].x - bases[j].x, agentPositions[i].y - bases[j].y);
             }
         }
 
-        // Apply Hungarian Algorithm to find the best assignment
-        HungarianAlgorithm hungarianAlgorithm = new HungarianAlgorithm(costMatrix);
-        int[] result = hungarianAlgorithm.execute();
-
-        // Find the best assignment
-        Int2D[] optimalBases = new Int2D[numAgents];
-        for (int i = 0; i < result.length; i++) {
-            optimalBases[i] = basePos[result[i]];
-        }
+        HungarianAlgorithm algorithm = new HungarianAlgorithm(distances);
+        int[] assignments = algorithm.execute();
+        Int2D[] optimalBases = Arrays.stream(assignments).mapToObj(i -> bases[i]).toArray(Int2D[]::new);
         return optimalBases[this.index];
     }
 
@@ -723,7 +675,7 @@ public class AgentFZM extends TWAgent {
         targethole = this.getMemory().getNearbyHole(x, y, 50);
 
         /*
-         * Decide the mode based on the current info of agent
+         * Decide the currentState based on the current info of agent
          * 
          * Default: EXPLORE
          * found fuel station and fuel is low : REFUEL
@@ -735,31 +687,31 @@ public class AgentFZM extends TWAgent {
 
         // TO DO:
         // 逻辑思路 现决定模式，再决定Thought
-        // mode = Mode.EXPLORE;
+        // currentState = State.EXPLORE;
         // 先检测是不是刚找到加油站/别人找到了但是自己还在找
-        // if(memory.getFuelStation() == null && mode==Mode.FIND_FUELSTATION) {
-        if (mode == Mode.FIND_FUELSTATION && memory.getFuelStation() != null) {
-            mode = Mode.EXPLORE;
+        // if(memory.getFuelStation() == null && currentState==State.FIND_FUELSTATION) {
+        if (currentState == State.FIND_FUELSTATION && memory.getFuelStation() != null) {
+            currentState = State.EXPLORE;
         }
 
         if (memory.getFuelStation() == null) {
             if (this.getFuelLevel() > this.fuelThreshold) {
-                mode = Mode.FIND_FUELSTATION;
-                System.out.println("Setting mode to find fuel station");
+                currentState = State.FIND_FUELSTATION;
+                System.out.println("Setting currentState to find fuel station");
             } else {
-                mode = Mode.WAIT;
-                System.out.println("No enough fuel, Setting mode to wait");
+                currentState = State.WAIT;
+                System.out.println("No enough fuel, Setting currentState to wait");
             }
         }
         // 如果找到了油站，而且自己要没有油了，就去加油
         // 这边可以设置一个动态阈值
         else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < 2.5
                 * this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))) {
-            mode = Mode.REFUEL;
-            System.out.println("Setting mode to refuel");
+            currentState = State.REFUEL;
+            System.out.println("Setting currentState to refuel");
         }
         // 如果还有油，而且找到了加油站，那就应该pick explore, 除非原本就是REFUEL就不要干扰
-        else if (mode != Mode.FIND_FUELSTATION && mode != Mode.REFUEL) {
+        else if (currentState != State.FIND_FUELSTATION && currentState != State.REFUEL) {
             // 如果有tile
             if (this.hasTile()) {
                 // 如果身上有少过3个tile
@@ -772,32 +724,32 @@ public class AgentFZM extends TWAgent {
                             // 如果目标tile更近
                             if (this.getDistanceTo(targethole.getX(), targethole.getY()) > this
                                     .getDistanceTo(targettile.getX(), targettile.getY())) {
-                                mode = Mode.COLLECT;
-                                System.out.println("Setting mode to collect");
+                                currentState = State.COLLECT;
+                                System.out.println("Setting currentState to collect");
                             }
                             // 如果目标hole更近
                             else {
-                                mode = Mode.FILL;
-                                System.out.println("Setting mode to fill");
+                                currentState = State.FILL;
+                                System.out.println("Setting currentState to fill");
                             }
                         }
                         // 如果没有目标tile， 但是有Hole 只能去填补了
                         else {
-                            mode = Mode.FILL;
-                            System.out.println("Setting mode to fill");
+                            currentState = State.FILL;
+                            System.out.println("Setting currentState to fill");
                         }
                     }
                     // 如果没有目标hole
                     else {
                         // 如果有目标tile
                         if (targettile != null) {
-                            mode = Mode.COLLECT;
-                            System.out.println("Setting mode to collect");
+                            currentState = State.COLLECT;
+                            System.out.println("Setting currentState to collect");
                         }
                         // 如果没有目标tile
                         else {
-                            mode = Mode.EXPLORE;
-                            System.out.println("Setting mode to explore");
+                            currentState = State.EXPLORE;
+                            System.out.println("Setting currentState to explore");
                         }
                     }
                 }
@@ -805,13 +757,13 @@ public class AgentFZM extends TWAgent {
                 else {
                     // 如果有目标hole
                     if (targethole != null) {
-                        mode = Mode.FILL;
-                        System.out.println("Setting mode to fill");
+                        currentState = State.FILL;
+                        System.out.println("Setting currentState to fill");
                     }
                     // 如果没有目标hole
                     else {
-                        mode = Mode.EXPLORE;
-                        System.out.println("Setting mode to explore");
+                        currentState = State.EXPLORE;
+                        System.out.println("Setting currentState to explore");
                     }
                 }
             }
@@ -819,10 +771,10 @@ public class AgentFZM extends TWAgent {
             else {
                 // memory里有目标tile吗？
                 if (targettile != null) { // this one can check for conflict with other agents
-                    mode = Mode.COLLECT;
-                    System.out.println("Setting mode to collect");
+                    currentState = State.COLLECT;
+                    System.out.println("Setting currentState to collect");
                 } else {
-                    mode = Mode.EXPLORE;
+                    currentState = State.EXPLORE;
                 }
             }
         }
@@ -839,7 +791,7 @@ public class AgentFZM extends TWAgent {
             // System.out.println("Current Location is Fuel Station");
             System.out.println("Now Adding Fuel");
             // 加了油就要变成explore
-            mode = Mode.EXPLORE;
+            currentState = State.EXPLORE;
             return new TWThought(TWAction.REFUEL, null);
         } else if (curLocObject instanceof TWHole && this.getEnvironment().canPutdownTile((TWHole) curLocObject, this)
                 && this.hasTile()) {
@@ -854,9 +806,9 @@ public class AgentFZM extends TWAgent {
         }
         ///////////////////////////////////////////////////////////
 
-        // 由当前mode 和Goal 确定 Thought
+        // 由当前currentState 和Goal 确定 Thought
         // 如果现在的目标是找加油站
-        if (mode == Mode.FIND_FUELSTATION) {
+        if (currentState == State.FIND_FUELSTATION) {
             // 如果已经做好了path to fuel station就不需要重新路径规划
             // 如果还没有做好规划
             if (this.planner.getGoals().isEmpty() && this.getAllPosition == true) {
@@ -878,18 +830,18 @@ public class AgentFZM extends TWAgent {
         } else {
             planner.voidGoals();
             planner.voidPlan();
-            if (mode == Mode.REFUEL) {
+            if (currentState == State.REFUEL) {
                 double verysafeFuelThreshold = (double) this.planner.getRemainingPathLength()
                         + 1.5 * this.fuelThreshold;
                 addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
                 this.planner.getGoals().add(memory.getFuelStation());
-            } else if (mode == Mode.FILL) {
+            } else if (currentState == State.FILL) {
                 this.compareAndSetTarget(targethole);
-            } else if (mode == Mode.WAIT) {
+            } else if (currentState == State.WAIT) {
                 return new TWThought(TWAction.MOVE, TWDirection.Z);
-            } else if (mode == Mode.COLLECT) {
+            } else if (currentState == State.COLLECT) {
                 this.compareAndSetTarget(targettile);
-            } else if (mode == Mode.EXPLORE) {
+            } else if (currentState == State.EXPLORE) {
                 return RandomMoveThought();
             }
         }
@@ -905,7 +857,7 @@ public class AgentFZM extends TWAgent {
 
         if (!planner.hasPlan()) {
             // 如果没有plan但是需要寻找fuelstation(找完了自己的位置但是没有goalStation)
-            if (this.mode == Mode.FIND_FUELSTATION) {
+            if (this.currentState == State.FIND_FUELSTATION) {
                 Int2D newGoal = generateRandomNearCell(planner.getGoals().get(0));
                 planner.getGoals().set(0, newGoal);
                 planner.generatePlan();
@@ -960,7 +912,7 @@ public class AgentFZM extends TWAgent {
             // this.move(thought.getDirection());
 
         } catch (CellBlockedException ex) {
-            // System.out.println("Current mode: "+this.mode);
+            // System.out.println("Current currentState: "+this.currentState);
             System.out.println("Size of goal: " + this.planner.getGoals().size());
             // 只能等障碍物消失才能继续前进，重新规划路径？
             System.out.println("N: " + this.memory.isCellBlocked(x, y - 1));
@@ -974,9 +926,9 @@ public class AgentFZM extends TWAgent {
         System.out.println(name + " score: " + this.score);
         // System.out.println("Assigned Zone: " +
         // Integer.toString(agentZones[agentIdx]));
-        // System.out.println("Mode: " + mode.name());
+        // System.out.println("State: " + currentState.name());
         System.out.println("Position: " + Integer.toString(this.x) + ", " + Integer.toString(this.y));
-        System.out.println("Current Mode: " + this.mode);
+        System.out.println("Current State: " + this.currentState);
         System.out.println("Size of goal: " + this.planner.getGoals().size());
 
         Int2D curGoal = planner.getCurrentGoal();

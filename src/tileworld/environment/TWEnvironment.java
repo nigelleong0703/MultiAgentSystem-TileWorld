@@ -125,18 +125,40 @@ public class TWEnvironment extends SimState implements Steppable {
         // pos = this.generateRandomLocation();
         // createAgent(new SimpleTWAgent("agent2", pos.getX(), pos.getY(), this,
         // Parameters.defaultFuelLevel));
+        // ---------------------------------------------------------------------------------------------------
+        // Int2D pos = this.generateRandomLocation();
+        // assert (this.isInBounds(pos.getX(), pos.getY()));
+        // createAgent(new AgentLZHInspector(0, "agent1", pos.getX(), pos.getY(), this,
+        // Parameters.defaultFuelLevel));
+        // Int2D pos2 = this.generateRandomLocation();
+        // assert (this.isInBounds(pos2.getX(), pos2.getY()));
+        // createAgent(new AgentLZH(1, "agent2", pos2.getX(), pos2.getY(), this,
+        // Parameters.defaultFuelLevel));
+        // Int2D pos3 = this.generateRandomLocation();
+        // assert (this.isInBounds(pos3.getX(), pos3.getY()));
+        // createAgent(new AgentLZH(2, "agent3", pos3.getX(), pos3.getY(), this,
+        // Parameters.defaultFuelLevel));
+        // Int2D pos4 = this.generateRandomLocation();
+        // assert (this.isInBounds(pos4.getX(), pos4.getY()));
+        // createAgent(new AgentLZH(3, "agent4", pos4.getX(), pos4.getY(), this,
+        // Parameters.defaultFuelLevel));
+        // Int2D pos5 = this.generateRandomLocation();
+        // assert (this.isInBounds(pos5.getX(), pos5.getY()));
+        // createAgent(new AgentLZH(4, "agent5", pos5.getX(), pos5.getY(), this,
+        // Parameters.defaultFuelLevel));
+        // ---------------------------------------------------------------------------------------------------
         Int2D pos = this.generateRandomLocation();
         assert (this.isInBounds(pos.getX(), pos.getY()));
         createAgent(new AgentLZHInspector(0, "agent1", pos.getX(), pos.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos2 = this.generateRandomLocation();
         assert (this.isInBounds(pos2.getX(), pos2.getY()));
-        createAgent(new AgentLZH(1, "agent2", pos2.getX(), pos2.getY(), this, Parameters.defaultFuelLevel));
+        createAgent(new AgentFZM(1, "agent2", pos2.getX(), pos2.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos3 = this.generateRandomLocation();
         assert (this.isInBounds(pos3.getX(), pos3.getY()));
-        createAgent(new AgentLZH(2, "agent3", pos3.getX(), pos3.getY(), this, Parameters.defaultFuelLevel));
+        createAgent(new AgentFZM(2, "agent3", pos3.getX(), pos3.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos4 = this.generateRandomLocation();
         assert (this.isInBounds(pos4.getX(), pos4.getY()));
-        createAgent(new AgentLZH(3, "agent4", pos4.getX(), pos4.getY(), this, Parameters.defaultFuelLevel));
+        createAgent(new AgentFZM(3, "agent4", pos4.getX(), pos4.getY(), this, Parameters.defaultFuelLevel));
         Int2D pos5 = this.generateRandomLocation();
         assert (this.isInBounds(pos5.getX(), pos5.getY()));
         createAgent(new AgentFZM(4, "agent5", pos5.getX(), pos5.getY(), this, Parameters.defaultFuelLevel));
