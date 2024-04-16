@@ -1,5 +1,7 @@
 package tileworld.agent;
 
+import java.awt.Color;
+import sim.display.GUIState;
 import sim.display.Console;
 import sim.portrayal.Inspector;
 import sim.portrayal.LocationWrapper;
@@ -9,38 +11,14 @@ import sim.util.Int2D;
 import sim.util.IntBag;
 import tileworld.Parameters;
 import tileworld.TWGUI;
-import tileworld.environment.TWDirection;
-import tileworld.environment.TWEntity;
-import tileworld.environment.TWEnvironment;
-import tileworld.environment.TWHole;
-import tileworld.environment.TWObject;
-import tileworld.environment.TWTile;
-import tileworld.environment.TWFuelStation;
+import tileworld.environment.*;
 import tileworld.exceptions.CellBlockedException;
-import tileworld.planners.TWPath;
-import tileworld.planners.TWPathStep;
-import tileworld.planners.TWPlannerLZH;
-import tileworld.environment.TWObstacle;
-import tileworld.agent.MyMemory;
-import tileworld.agent.MyMessage;
-import tileworld.agent.TWAgentSensor;
-import tileworld.agent.TWAgent;
+import tileworld.planners.*;
+import tileworld.agent.*;
 
-import java.util.Arrays;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.PriorityQueue;
-import java.util.Random;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.*;
 
-public class AgentLZH extends TWAgent {
+public class AgentFZM extends TWAgent {
     private String name;
     private int index;
     private final int mapsizeX = this.getEnvironment().getxDimension();
@@ -66,7 +44,7 @@ public class AgentLZH extends TWAgent {
     private double RecentRange = 20.0;
     private double recentConstant = 3;
 
-    public AgentLZH(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
+    public AgentFZM(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         this.index = index;
         this.name = name;
@@ -81,11 +59,24 @@ public class AgentLZH extends TWAgent {
 
     }
 
-    public AgentLZH(int xpos, int ypos, TWEnvironment env, double fuelLevel) {
+    public AgentFZM(int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         // this.planner = new AstarPathGenerator(this.getEnvironment(), this,
         // mapsizeX+mapsizeY);
         this.planner = new TWPlannerLZH(this);
+    }
+
+    // Better clarity for debugging
+    @Override
+    public Portrayal getPortrayal() {
+        return new TWAgentPortrayal(Color.pink, Parameters.defaultSensorRange) {
+
+            @Override
+            public Inspector getInspector(LocationWrapper wrapper, GUIState state) {
+                // make the inspector
+                return new AgentInspector(super.getInspector(wrapper, state), wrapper, state);
+            }
+        };
     }
 
     @Override
