@@ -145,108 +145,88 @@ public class AgentFZM extends TWAgent {
         }
     }
 
+    // 计算指向源点的吸引力
     private void applySource(int x, int y, Int2D sourceAttraction, Map<TWDirection, Double> scores) {
-        // 根据自身的位置和需要到达的sourceAttraction的位置，计算出每个方向的score
-        ArrayList<TWDirection> directionToSource = getDirectionFromPositions(x, y, sourceAttraction.x,
-                sourceAttraction.y);
-        for (TWDirection dir : directionToSource) {
-            if (scores.containsKey(dir)) {
-                // 如果是E,W 算Attraction就用x, 如果是N,S 算Attraction就用y
-                if (dir == TWDirection.E || dir == TWDirection.W) {
-                    scores.put(dir, scores.get(dir) + this.sourceAttraction * Math.abs(x - sourceAttraction.x));
-                } else {
-                    scores.put(dir, scores.get(dir) + this.sourceAttraction * Math.abs(y - sourceAttraction.y));
-                }
-            }
+        double deltaX = x - sourceAttraction.x;
+        double deltaY = y - sourceAttraction.y;
+
+        if (deltaX != 0) {
+            TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
+            scores.merge(horizontalDir, this.sourceAttraction * Math.abs(deltaX), Double::sum);
+        }
+
+        if (deltaY != 0) {
+            TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
+            scores.merge(verticalDir, this.sourceAttraction * Math.abs(deltaY), Double::sum);
         }
     }
 
+    // 计算周围其他智能体的排斥力
     private void applyRepulsion(int x, int y, Map<TWDirection, Double> scores) {
-        Int2D[] allAgentPosition = this.memory.getAgentPositionAll();
-        for (int i = 0; i < 5; i++) {
-            if (i == this.index) {
+        for (int i = 0; i < this.memory.getAgentPositionAll().length; i++) {
+            if (i == this.index)
                 continue;
+            Int2D agentPos = this.memory.getAgentPositionAll()[i];
+            double deltaX = x - agentPos.x;
+            double deltaY = y - agentPos.y;
+
+            if (Math.abs(deltaX) <= this.repulsionRange) {
+                TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
+                scores.merge(horizontalDir, -this.RepulsiveConstant * Math.abs(deltaX), Double::sum);
             }
-            Int2D agent = allAgentPosition[i];
-            ArrayList<TWDirection> directionToAgent = getDirectionFromPositions(x, y, agent.x, agent.y);
-            for (TWDirection dir : directionToAgent) {
-                if (scores.containsKey(dir)) {
-                    // 如果是E,W 算repulsion force就用x, 如果是N,S 算repulsion force就用y
-                    if (dir == TWDirection.E || dir == TWDirection.W) {
-                        scores.put(dir, scores.get(dir) - this.RepulsiveConstant * Math.abs(x - agent.x));
-                    } else {
-                        scores.put(dir, scores.get(dir) - this.RepulsiveConstant * Math.abs(y - agent.y));
-                    }
-                }
+
+            if (Math.abs(deltaY) <= this.repulsionRange) {
+                TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
+                scores.merge(verticalDir, -this.RepulsiveConstant * Math.abs(deltaY), Double::sum);
             }
         }
     }
 
+    // 结合排斥力和历史移动惩罚更新方向得分
     private void applyRepulsionAndHistory(int x, int y, Map<TWDirection, Double> scores) {
         applyRepulsion(x, y, scores);
-        updateDirectionScoresWithHistory(scores); // Apply a penalty of 1 for recent moves
+        updateDirectionScoresWithHistory(scores);
     }
 
+    // 计算历史移动的惩罚
     private double calculateHistoryPenalty(Int2D newPosition) {
-        double penalty = 0.0;
-        for (Int2D historyPosition : recentPosition) {
-            double distance = Math.sqrt(Math.pow(newPosition.x - historyPosition.x, 2) +
-                    Math.pow(newPosition.y - historyPosition.y, 2));
-            if (distance < this.RecentRange) { // Define a "proximity zone" radius
-                penalty += (this.RecentRange - distance); // The closer it is, the higher the penalty
-            }
-        }
-        return penalty;
+        return recentPosition.stream()
+                .mapToDouble(p -> {
+                    double distance = newPosition.distance(p);
+                    return distance < this.RecentRange ? (this.RecentRange - distance) : 0;
+                })
+                .sum();
     }
 
+    // 更新方向得分，考虑历史移动
     private void updateDirectionScoresWithHistory(Map<TWDirection, Double> scores) {
-        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
-            Int2D newPosition = new Int2D(this.x + entry.getKey().dx, this.y + entry.getKey().dy);
+        scores.forEach((dir, score) -> {
+            Int2D newPosition = new Int2D(this.x + dir.dx, this.y + dir.dy);
             double penalty = calculateHistoryPenalty(newPosition);
-            scores.put(entry.getKey(), entry.getValue() - this.recentConstant * penalty);
-        }
+            scores.put(dir, score - this.recentConstant * penalty);
+        });
     }
 
+    // 更新最近位置记录
     public void updateRecentLocation(TWDirection selectedDirection) {
-        if (recentPosition.size() >= this.recentWindowHistoryLength) { // Limit to the last 5 moves
+        if (recentPosition.size() >= this.recentWindowHistoryLength) {
             recentPosition.poll(); // Remove the oldest
         }
         recentPosition
-                .add(getPositionAdd(new Int2D(this.x, this.y), new Int2D(selectedDirection.dx, selectedDirection.dy))); // Add
-                                                                                                                        // the
-                                                                                                                        // newest
+                .add(getPositionAdd(new Int2D(this.x, this.y), new Int2D(selectedDirection.dx, selectedDirection.dy)));
     }
 
+    // 获取从当前位置到目标位置的方向
     public ArrayList<TWDirection> getDirectionFromPositions(int x1, int y1, int x2, int y2) {
-        // 对比 agent1 和agent 2的位置，范围一组方向
-        int dx = x2 - x1; // 说明agent2 在agent 1的右边
-        int dy = y2 - y1; // 说明agent2 在agent 1的下边
+        ArrayList<TWDirection> directions = new ArrayList<>();
+        int dx = Integer.compare(x2, x1);
+        int dy = Integer.compare(y2, y1);
 
-        // Repulsion 只在一个range内有效，超过了就吧either dx or dy 清0
-        if (Math.abs(dx) > this.repulsionRange) {
-            dx = 0;
+        if (dx != 0) {
+            directions.add(dx > 0 ? TWDirection.E : TWDirection.W);
         }
-        if (Math.abs(dy) > this.repulsionRange) {
-            dy = 0;
-        }
-
-        // return a list of direction, to indicate the direction of the agent
-        ArrayList<TWDirection> directions = new ArrayList<TWDirection>();
-
-        // 先看是不是在右边，如果是需要在direction增加twdirection右边,
-        // E，如果不是就再看是不是在左边，如果是在左边就在direction增加twdirection左边，W，都不是就pass
-        if (dx > 0) {
-            directions.add(TWDirection.E); // East
-        } else if (dx < 0) {
-            directions.add(TWDirection.W); // West
-        }
-
-        // 再看是不是在下边，如果是需要在direction增加twdirection下边,
-        // S，如果不是就再看是不是在上边，如果是在上边就在direction增加twdirection上边，N，都不是就pass
-        if (dy > 0) {
-            directions.add(TWDirection.S); // South
-        } else if (dy < 0) {
-            directions.add(TWDirection.N); // North
+        if (dy != 0) {
+            directions.add(dy > 0 ? TWDirection.S : TWDirection.N);
         }
         return directions;
     }
