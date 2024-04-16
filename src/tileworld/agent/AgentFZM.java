@@ -359,105 +359,54 @@ public class AgentFZM extends TWAgent {
         this.getEnvironment().receiveMessage(message);
     }
 
-    private void findFuelAddGoal(double verysafeFuelThreshold, TWTile targettile,
-            TWHole targethole) {
-        // 先检查有没有targettile和targethole, 如果有，就要检查自己和这些东西的距离是不是在我的sensorrange范围里面，
-        // 不是直接skip
-        if (targettile != null && this.getDistanceTo(targettile) > Parameters.defaultSensorRange) {
-            targettile = null;
-        }
-        if (targethole != null && this.getDistanceTo(targethole) > Parameters.defaultSensorRange) {
-            targethole = null;
-        }
+    private void findFuelAddGoal(double verysafeFuelThreshold, TWTile targettile, TWHole targethole) {
+        // 先检查目标对象是否在传感器范围内
+        targettile = checkTileInRange(targettile);
+        targethole = checkHoleInRange(targethole);
+
+        // 尝试添加目标到适当的位置
         addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
 
-        // 这边要看我的goal()的第一个位置是不是eitherr tile or hole, 如果是就要在这个goal后面插进去我现在的位置，
-        // 但是有可能是targettile或者targethole是null, 要先检查
-        if (this.planner.getGoals().size() > 0) {
-            // 从planner.goal读出第一个goal 的Int2D
+        // 如果第一个目标是 Tile 或 Hole，则在它后面添加当前位置
+        insertCurrentPositionIfNeeded();
+    }
+
+    private TWTile checkTileInRange(TWTile tile) {
+        return (tile != null && this.getDistanceTo(tile) <= Parameters.defaultSensorRange) ? tile : null;
+    }
+
+    private TWHole checkHoleInRange(TWHole hole) {
+        return (hole != null && this.getDistanceTo(hole) > Parameters.defaultSensorRange) ? null : hole;
+    }
+
+    private void insertCurrentPositionIfNeeded() {
+        if (!this.planner.getGoals().isEmpty()) {
             TWObject firstGoal = this.memory.getObject(this.planner.getGoals().get(0).x,
                     this.planner.getGoals().get(0).y);
-
             if (firstGoal instanceof TWTile || firstGoal instanceof TWHole) {
                 this.planner.getGoals().add(1, new Int2D(this.x, this.y));
             }
         }
     }
 
-    private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile,
-            TWHole targethole) {
-
+    private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile, TWHole targethole) {
         if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
-            int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
-            if (index != -1) { // 如果找到了这个目标
-                //// 这个需要debug一下
-                System.out.println(index);
-                planner.getGoals().remove(index);
-            }
+            this.planner.getGoals().remove(new Int2D(this.x, this.y));
         }
-        // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold,
-        // 就可以做别的事情（collect or fill)
-        else if (this.getFuelLevel() > verysafeFuelThreshold) {
-            // 先看有没有有没有同时有tile and hole，如果同时有再看距离
-            if (targettile != null && targethole != null) {
-                // 如果tile更近
-                if (this.carriedTiles.size() < 3 && this.getDistanceTo(targettile.getX(),
-                        targettile.getY()) < this
-                                .getDistanceTo(targethole.getX(), targethole.getY())) {
-                    // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    if (this.getDistanceTo(targettile.getX(), targettile.getY()) +
-                            verysafeFuelThreshold < this
-                                    .getFuelLevel()) {
-                        if (!planner.getGoals().isEmpty()
-                                && !this.planner.getGoals().contains(new Int2D(targettile.getX(),
-                                        targettile.getY()))) {
-                            this.compareAndSetTarget(targettile, index = 0);
-                        }
-                    }
-                }
-                // 如果hole更近
-                else {
-                    // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    // 还要判断身上有没有tile
-                    if (this.carriedTiles.size() > 0 && this.getDistanceTo(targethole.getX(),
-                            targethole.getY())
-                            + verysafeFuelThreshold < this.getFuelLevel()) {
-                        if (!planner.getGoals().isEmpty()
-                                && !this.planner.getGoals().contains(new Int2D(targethole.getX(),
-                                        targethole.getY()))) {
-                            this.compareAndSetTarget(targethole, index = 0);
-                        }
-                    }
-                }
-            }
-            // 如果只有目标tile
-            else if (targettile != null && this.carriedTiles.size() < 3) {
-                // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targettile.getX(), targettile.getY()) +
-                        verysafeFuelThreshold < this
-                                .getFuelLevel()) {
-                    if (!planner.getGoals().isEmpty()
-                            && !this.planner.getGoals().contains(new Int2D(targettile.getX(),
-                                    targettile.getY()))) {
-                        this.compareAndSetTarget(targettile, index = 0);
-                    }
-                }
-            }
-            // 如果只有目标hole并且自己carriedTiles.size>0
-            else if (targethole != null && this.carriedTiles.size() > 0) {
-                // 检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targethole.getX(), targethole.getY()) +
-                        verysafeFuelThreshold < this
-                                .getFuelLevel()) {
-                    if (!planner.getGoals().isEmpty()
-                            && !this.planner.getGoals().contains(new Int2D(targethole.getX(),
-                                    targethole.getY()))) {
-                        this.compareAndSetTarget(targethole, index = 0);
-                    }
-                }
-            }
-            // 什么都没有就不用做extra
+
+        prioritizeGoal(verysafeFuelThreshold, targettile, targethole);
+    }
+
+    private void prioritizeGoal(double verysafeFuelThreshold, TWTile tile, TWHole hole) {
+        if (tile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(tile, verysafeFuelThreshold)) {
+            this.compareAndSetTarget(tile, 0);
+        } else if (hole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(hole, verysafeFuelThreshold)) {
+            this.compareAndSetTarget(hole, 0);
         }
+    }
+
+    private boolean shouldPrioritizeGoal(TWEntity entity, double threshold) {
+        return this.getDistanceTo(entity.getX(), entity.getY()) + threshold < this.getFuelLevel();
     }
 
     @Override
