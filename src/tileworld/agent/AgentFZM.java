@@ -729,66 +729,70 @@ public class AgentFZM extends TWAgent {
 
     @Override
     protected void act(TWThought thought) {
-        try {
-            switch (thought.getAction()) {
-                case MOVE:
-                    // System.out.println("Direction:" + thought.getDirection());
-                    // 不太清楚为什么会out of bound, 检测如果会的话，就随机一个方向
-                    if (this.x + thought.getDirection().dx < 0
-                            || this.x + thought.getDirection().dx >= this.getEnvironment().getxDimension()
-                            || this.y + thought.getDirection().dy < 0
-                            || this.y + thought.getDirection().dy >= this.getEnvironment().getyDimension()) {
-                        System.out.println("Out of bound");
-                        // 随机的方向也不可以outoufbound, 我没有random的function
-                        move(randomMoveThought().getDirection());
-                    } else {
-                        move(thought.getDirection());
-                    }
-                    break;
-                case PICKUP:
-                    TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
-                    pickUpTile(tile);
-                    // planner.getGoals().clear();
-                    planner.getGoals().remove(new Int2D(this.x, this.y));
-                    break;
-                case PUTDOWN:
-                    TWHole hole = (TWHole) memory.getMemoryGrid().get(this.x, this.y);
-                    putTileInHole(hole);
-                    // planner.getGoals().clear();
-                    planner.getGoals().remove(new Int2D(this.x, this.y));
-                    break;
-                case REFUEL:
-                    refuel();
-                    planner.getGoals().clear();
-                    break;
-            }
-            // this.move(thought.getDirection());
-
-        } catch (CellBlockedException ex) {
-            // System.out.println("Current currentState: "+this.currentState);
-            System.out.println("Size of goal: " + this.planner.getGoals().size());
-            // 只能等障碍物消失才能继续前进，重新规划路径？
-            System.out.println("N: " + this.memory.isCellBlocked(x, y - 1));
-            System.out.println("S: " + this.memory.isCellBlocked(x, y + 1));
-            System.out.println("E: " + this.memory.isCellBlocked(x + 1, y));
-            System.out.println("W: " + this.memory.isCellBlocked(x - 1, y));
-            System.out.println(
-                    "Cell is blocked. Current Position: " + Integer.toString(this.x) + ", " + Integer.toString(this.y));
+        switch (thought.getAction()) {
+            case MOVE:
+                performMoveAction(thought.getDirection());
+                break;
+            case PICKUP:
+                TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
+                pickUpTile(tile);
+                planner.getGoals().remove(new Int2D(this.x, this.y));
+                break;
+            case PUTDOWN:
+                TWHole hole = (TWHole) memory.getMemoryGrid().get(this.x, this.y);
+                putTileInHole(hole);
+                planner.getGoals().remove(new Int2D(this.x, this.y));
+                break;
+            case REFUEL:
+                refuel();
+                planner.getGoals().clear();
+                break;
         }
+        printAgentState();
+    }
+
+    private void performMoveAction(TWDirection direction) {
+        int newX = this.x + direction.dx;
+        int newY = this.y + direction.dy;
+        if (isOutOfBounds(newX, newY)) {
+            System.out.println("Out of bound");
+            // Attempt to recover from out of bounds by moving in a valid random direction
+            try {
+                move(randomMoveThought().getDirection());
+            } catch (CellBlockedException e) {
+                handleBlockedCell(); // Handle the case where even the random direction is blocked
+            }
+        } else {
+            try {
+                move(direction);
+            } catch (CellBlockedException e) {
+                handleBlockedCell(); // Handle blocked cell situation
+            }
+        }
+    }
+
+    private boolean isOutOfBounds(int x, int y) {
+        return x < 0 || x >= this.getEnvironment().getxDimension() || y < 0
+                || y >= this.getEnvironment().getyDimension();
+    }
+
+    private void handleBlockedCell() {
+        System.out.println("Size of goal: " + this.planner.getGoals().size());
+        System.out.println("N: " + this.memory.isCellBlocked(x, y - 1));
+        System.out.println("S: " + this.memory.isCellBlocked(x, y + 1));
+        System.out.println("E: " + this.memory.isCellBlocked(x + 1, y));
+        System.out.println("W: " + this.memory.isCellBlocked(x - 1, y));
+        System.out.println("Cell is blocked. Current Position: " + this.x + ", " + this.y);
+    }
+
+    private void printAgentState() {
         System.out.println("Step " + this.getEnvironment().schedule.getSteps());
         System.out.println(name + " score: " + this.score);
-        // System.out.println("Assigned Zone: " +
-        // Integer.toString(agentZones[agentIdx]));
-        // System.out.println("State: " + currentState.name());
-        System.out.println("Position: " + Integer.toString(this.x) + ", " + Integer.toString(this.y));
+        System.out.println("Position: " + this.x + ", " + this.y);
         System.out.println("Current State: " + this.currentState);
         System.out.println("Size of goal: " + this.planner.getGoals().size());
-
         Int2D curGoal = planner.getCurrentGoal();
-        if (curGoal != null) {
-            System.out.println("Goal: " + curGoal.x + ", " + curGoal.y);
-        } else
-            System.out.println("Goal: Nothing");
+        System.out.println("Goal: " + (curGoal != null ? curGoal.x + ", " + curGoal.y : "Nothing"));
         System.out.println("Tiles: " + this.carriedTiles.size());
         System.out.println("Fuel Level: " + this.fuelLevel);
         System.out.println("Fuel Station: " + this.memory.getFuelStation());
