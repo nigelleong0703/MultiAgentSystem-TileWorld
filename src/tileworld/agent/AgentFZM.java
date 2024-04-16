@@ -15,6 +15,7 @@ import tileworld.planners.*;
 import tileworld.agent.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class AgentFZM extends TWAgent {
     private int index;
@@ -232,45 +233,31 @@ public class AgentFZM extends TWAgent {
     }
 
     private boolean checkMapOutofBound(int x, int y) {
-        return x < 0 || x >= this.getEnvironment().getxDimension() || y < 0
-                || y >= this.getEnvironment().getyDimension();
+        TWEnvironment env = this.getEnvironment();
+        return x < 0 || x >= env.getxDimension() || y < 0 || y >= env.getyDimension();
     }
 
-    private TWThought RandomMoveThought() {
-        // ArrayList<TWDirection> dirs = new ArrayList<>();
+    private TWThought randomMoveThought() {
         Map<TWDirection, Double> directionScores = new HashMap<>();
         int x = this.getX();
         int y = this.getY();
-
-        // Int2D sourceAttraction = findNearestBase(this.memory.findLowestNZone(5),
-        // this.memory.getAgentPositionAll());
-        // print out the agent name + source
-        System.out.println(this.name + " source: " + sourceAttraction);
-
-        // Initialize the direction scores
+        System.out.println(this.name + " source: " + sourceAttractionPoint);
         directionScores.put(TWDirection.N, 0.0);
         directionScores.put(TWDirection.S, 0.0);
         directionScores.put(TWDirection.E, 0.0);
         directionScores.put(TWDirection.W, 0.0);
 
         if (sourceAttractionPoint != null) {
-            // Apply source attraction (attraction to the source point
             applySource(x, y, sourceAttractionPoint, directionScores);
         }
         applyRepulsionAndHistory(x, y, directionScores);
-        // 调整score所以不会有负数出现
-        // Find the minimum score
+
         double minScore = Collections.min(directionScores.values());
-        if (minScore < 0) {
-            double offset = Math.abs(minScore);
-            for (Map.Entry<TWDirection, Double> entry : directionScores.entrySet()) {
-                directionScores.put(entry.getKey(), entry.getValue() + offset);
-            }
-        }
+        directionScores.replaceAll((dir, score) -> score + Math.max(-minScore, 0));
+
         if (!directionScores.isEmpty()) {
             TWDirection selectedDirection = selectDirectionWithWeights(directionScores, x, y);
             updateRecentLocation(selectedDirection);
-
             return new TWThought(TWAction.MOVE, selectedDirection);
         } else {
             System.out.println("No where to go!");
@@ -279,79 +266,57 @@ public class AgentFZM extends TWAgent {
     }
 
     private TWDirection selectDirectionWithWeights(Map<TWDirection, Double> scores, int x, int y) {
-        // Filter valid and non-blocked directions with non-zero scores
         List<TWDirection> validDirections = new ArrayList<>();
         List<Double> weights = new ArrayList<>();
 
-        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
-            int newX = x + entry.getKey().dx;
-            int newY = y + entry.getKey().dy;
-            if (!checkMapOutofBound(newX, newY)) {
-                if (!this.memory.isCellBlocked(newX, newY)) {
-                    validDirections.add(entry.getKey());
-                    weights.add(entry.getValue() + 1);
-                }
+        scores.forEach((direction, score) -> {
+            int newX = x + direction.dx;
+            int newY = y + direction.dy;
+            if (!checkMapOutofBound(newX, newY) && !this.memory.isCellBlocked(newX, newY)) {
+                validDirections.add(direction);
+                weights.add(score);
             }
-        }
+        });
 
-        // If no valid directions are available, return TWDirection.Z
         if (validDirections.isEmpty()) {
             System.out.println("No walkable direction available.");
             return TWDirection.Z;
         }
 
-        // Normalize weights and select based on the weighted random
+        return weightedRandomSelection(validDirections, weights);
+    }
+
+    private TWDirection weightedRandomSelection(List<TWDirection> directions, List<Double> weights) {
         double totalWeight = weights.stream().mapToDouble(Double::doubleValue).sum();
         if (totalWeight == 0) {
-            // If all weights are zero but we have valid directions, choose randomly among
-            // them
-            return validDirections.get(new Random().nextInt(validDirections.size()));
+            return directions.get(new Random().nextInt(directions.size()));
         }
-
         double random = Math.random() * totalWeight;
-        // double random = totalWeight;
         double cumulativeWeight = 0.0;
-        for (int i = 0; i < validDirections.size(); i++) {
+        for (int i = 0; i < directions.size(); i++) {
             cumulativeWeight += weights.get(i);
             if (cumulativeWeight >= random) {
-                return validDirections.get(i);
+                return directions.get(i);
             }
         }
-
-        // Fallback in case of rounding errors, should not normally be reached
-        return validDirections.get(validDirections.size() - 1);
+        return directions.get(directions.size() - 1);
     }
 
     private Int2D generateRandomNearCell(Int2D goalPos) {
-        // TODO Auto-generated method stub
-        ArrayList<Int2D> dirs = new ArrayList<Int2D>();
-        int x = goalPos.getX();
-        int y = goalPos.getY();
+        List<Int2D> potentialPositions = Arrays.asList(
+                new Int2D(goalPos.x, goalPos.y - 1),
+                new Int2D(goalPos.x, goalPos.y + 1),
+                new Int2D(goalPos.x + 1, goalPos.y),
+                new Int2D(goalPos.x - 1, goalPos.y));
+        List<Int2D> validPositions = potentialPositions.stream()
+                .filter(p -> !checkMapOutofBound(p.x, p.y) && !this.memory.isCellBlocked(p.x, p.y))
+                .collect(Collectors.toList());
 
-        if ((y - 1) >= 0
-                && !this.memory.isCellBlocked(x, y - 1)) {
-            dirs.add(new Int2D(x, y - 1));
-        }
-        if ((y + 1) < this.getEnvironment().getyDimension()
-                && !this.memory.isCellBlocked(x, y + 1)) {
-            dirs.add(new Int2D(x, y + 1));
-        }
-        if ((x + 1) < this.getEnvironment().getxDimension()
-                && !this.memory.isCellBlocked(x + 1, y)) {
-            dirs.add(new Int2D(x + 1, y));
-        }
-        if ((x - 1) >= 0
-                && !this.memory.isCellBlocked(x - 1, y)) {
-            dirs.add(new Int2D(x - 1, y));
-        }
-
-        if (dirs.size() > 0) {
-            int random_num = this.getEnvironment().random.nextInt(dirs.size());
-            return dirs.get(random_num);
-        } else {
+        if (validPositions.isEmpty()) {
             System.out.println("No where to go!");
             return null;
         }
+        return validPositions.get(new Random().nextInt(validPositions.size()));
     }
 
     // 对比然后增加进去goal里面
@@ -780,7 +745,7 @@ public class AgentFZM extends TWAgent {
             } else if (currentState == State.COLLECT) {
                 this.compareAndSetTarget(targettile);
             } else if (currentState == State.EXPLORE) {
-                return RandomMoveThought();
+                return randomMoveThought();
             }
         }
 
@@ -788,7 +753,7 @@ public class AgentFZM extends TWAgent {
         // System.out.println("Goals " + i + ": " + planner.getGoals().get(i));
         // }
         if (this.planner.getGoals().isEmpty()) {
-            return RandomMoveThought();
+            return randomMoveThought();
         }
         // 如果计划不为空，则调用generatePlan()方法生成一条路径计划
         this.planner.generatePlan();
@@ -805,7 +770,7 @@ public class AgentFZM extends TWAgent {
         }
         // 检查是否生成了计划
         if (!planner.hasPlan()) {
-            return RandomMoveThought();
+            return randomMoveThought();
         }
 
         TWDirection dir = this.planner.execute();
@@ -825,7 +790,7 @@ public class AgentFZM extends TWAgent {
                             || this.y + thought.getDirection().dy >= this.getEnvironment().getyDimension()) {
                         System.out.println("Out of bound");
                         // 随机的方向也不可以outoufbound, 我没有random的function
-                        move(RandomMoveThought().getDirection());
+                        move(randomMoveThought().getDirection());
                     } else {
                         move(thought.getDirection());
                     }
