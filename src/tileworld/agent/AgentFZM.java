@@ -94,9 +94,8 @@ public class AgentFZM extends TWAgent {
         return new Int2D(base.x + position.x, base.y + position.y);
     }
 
-    // 这个逻辑不是很对，需要改，这个是分层之后往回走来走去扫描
-
     public Int2D findNearestBase(Int2D[] bases, Int2D[] agentPositions) {
+        // 使用实际的neighbouringAgents和basePos数组长度初始化代价矩阵
         int agentCount = agentPositions.length;
         int baseCount = bases.length;
         double[][] distances = new double[agentCount][baseCount];
@@ -115,8 +114,7 @@ public class AgentFZM extends TWAgent {
 
     public void addGoalsForFuelStation() {
         System.out.println("Assigning search area for " + this.name);
-        planner.voidGoals();
-        planner.voidPlan();
+        planner.voidGoals(); // 清除当前所有目标
         Int2D[] basePos = {
                 new Int2D(0, 0),
                 new Int2D(0, Parameters.yDimension / 5),
@@ -124,66 +122,26 @@ public class AgentFZM extends TWAgent {
                 new Int2D(0, (Parameters.yDimension / 5) * 3),
                 new Int2D(0, (Parameters.yDimension / 5) * 4),
         };
-        // Instead of 去到指定的区域，找一个更接近的区域去寻找
-        Int2D base = findNearestBase(basePos, this.memory.getAgentPositionAll());
-        System.out.println(this.name + ", I need to go to: " + base);
-        // Int2D base = basePos[this.index];
-        Int2D position = new Int2D(Parameters.defaultSensorRange, Parameters.defaultSensorRange);
-        int depth = Parameters.defaultSensorRange;
 
-        while (depth < Parameters.yDimension / 5) {
-            int posX = position.x;
-            int posY = position.y;
-            planner.getGoals().add(getPositionAdd(base, position));
+        // 寻找最近的基地
+        Int2D nearestBase = findNearestBase(basePos, this.memory.getAgentPositionAll());
+        System.out.println(this.name + ", I need to go to: " + nearestBase);
 
-            // point1 位于当前基地的右侧， 与当前基地的距离为Paramaeters.defaultSensorRange,
-            // 与环境的右边缘的距离为Parameters.defaultSensorRange
-            posX += Parameters.xDimension - Parameters.defaultSensorRange - 1;
-            position = new Int2D(posX, position.y);
-            planner.getGoals().add(getPositionAdd(base, position));
+        // 添加目标位置
+        // int stripDepth = Parameters.yDimension / 5;
+        int sensorRange = Parameters.defaultSensorRange;
+        int maxDepth = Parameters.yDimension - sensorRange - 1;
+        for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
+            int posY = Math.min(depth, maxDepth); // 确保不会超出边界
+            Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
+            Int2D leftEdgePosition = new Int2D(sensorRange, posY);
 
-            // agent 的深度， 从最顶部下来的深度(中心位置)
-            depth = depth + Parameters.defaultSensorRange * 2 + 1;
-            // 在最后一行，如果往下走的距离会超过strip，则让中心刚刚好达到最底下的边界
-            if (depth >= Parameters.yDimension / 5) {
-                //
-                posY = Parameters.yDimension / 5 - 1 - Parameters.defaultSensorRange;
-                depth = Parameters.yDimension / 5 - 1 - Parameters.defaultSensorRange;
-                position = new Int2D(position.x, posY);
-                planner.getGoals().add(getPositionAdd(base, position));
-
-                //
-                posX = Parameters.defaultSensorRange;
-                position = new Int2D(posX, position.y);
-                planner.getGoals().add(getPositionAdd(base, position));
-                break;
+            // 添加从基地向右侧和左侧的目标位置
+            planner.getGoals().add(getPositionAdd(nearestBase, new Int2D(0, posY)));
+            planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+            if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
+                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
             }
-
-            // Point 2
-            posY += Parameters.defaultSensorRange * 2 + 1;
-            position = new Int2D(position.x, posY);
-            planner.getGoals().add(getPositionAdd(base, position));
-
-            // point 3
-            posX = Parameters.defaultSensorRange;
-            position = new Int2D(posX, position.y);
-            planner.getGoals().add(getPositionAdd(base, position));
-
-            depth += Parameters.defaultSensorRange * 2 + 1;
-
-            // 往下走一层，如果也是超过边界，则将中心刚刚好达到最底下的边界
-            if (depth > Parameters.yDimension / 5) {
-                posY = Parameters.yDimension / 5 - 1 - Parameters.defaultSensorRange;
-                posX = Parameters.defaultSensorRange;
-                depth = Parameters.yDimension / 5 - 1 - Parameters.defaultSensorRange;
-                position = new Int2D(posX, posY);
-                planner.getGoals().add(getPositionAdd(base, position));
-                break;
-            }
-
-            posY += Parameters.defaultSensorRange * 2 + 1;
-            position = new Int2D(position.x, posY);
-            planner.getGoals().add(getPositionAdd(base, position));
         }
     }
 
