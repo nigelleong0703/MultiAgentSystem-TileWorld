@@ -39,6 +39,7 @@ public class MyMemory extends TWAgentWorkingMemory {
     private int zoneHeight;
 	private double headmapDecayfactor = 0.9;
 	private int[] agentsCarriedTiles = new int[5];
+	private double maxDistanceToExplore = 100;
 
 	protected Int2D fuelStation;
 	
@@ -579,7 +580,7 @@ public class MyMemory extends TWAgentWorkingMemory {
 			for (int j = 0; j < visitCounts[i].length; j++) {
 				Int2D center = new Int2D(i * zoneWidth + zoneWidth / 2, j * zoneHeight + zoneHeight / 2);
 				if (referencePoint != null) {
-					if (calculateDistance(center, referencePoint) <= 50.0) {
+					if (calculateDistance(center, referencePoint) <= this.maxDistanceToExplore) {
 		                cells.add(new Cell(visitCounts[i][j], center));
 		            }
 				}

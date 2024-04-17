@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.Random;
@@ -66,14 +67,15 @@ public class AgentLZH extends TWAgent {
     private int sourceAttraction = this.getEnvironment().getxDimension();
     private Int2D sourceAttractionPoint = null;
     private double RecentRange = 20.0;
-    private double recentConstant = 3;
+    private double recentConstant = this.getEnvironment().getxDimension() / 10.0;
+    private double exploration_param = 1.0; // ranging from 0.0 to 1.0
 
     public AgentLZH(int index, String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
         this.index = index;
         this.name = name;
         // fuel threshold
-        this.fuelThreshold = Math.max(Parameters.xDimension, Parameters.yDimension) * 1.2;
+        this.fuelThreshold = Math.max(Parameters.xDimension, Parameters.yDimension) * 1.1;
         // Sensor
         this.sensor = new TWAgentSensor(this, Parameters.defaultSensorRange);
         // 路径规划
@@ -167,35 +169,52 @@ public class AgentLZH extends TWAgent {
         };
         // Instead of 去到指定的区域，找一个更接近的区域去寻找
         Int2D nearestBase = findNearestBase(basePos, this.memory.getAgentPositionAll());
-        System.out.println(this.name + ", I need to go to: " + nearestBase);
+        System.out.println(this.name + ", I need to go to: " + nearestBase); // showing 0,80
 
         // 添加目标位置
         int sensorRange = Parameters.defaultSensorRange;
-        int maxDepth = Parameters.yDimension - sensorRange - 1;
-        boolean addRightFirst = true;
-        for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
+        int maxDepth = nearestBase.y + Parameters.yDimension / 5 - sensorRange - 1;
+        int startingDepth = nearestBase.y;
+        // boolean addRightFirst = false;
+        // check my location if it located on the left or right, if right, addRightFirst = true, and change the nearestBase.x to the right side
+        boolean addRightFirst = this.x > Parameters.xDimension / 2;
+        if (addRightFirst) {
+            nearestBase = new Int2D(Parameters.xDimension - 1, nearestBase.y);
+        }
+        System.out.println("Agent " + this.name + " is going to the nearest base at " + nearestBase);
+        int depth;
+        for (depth = startingDepth; depth <= maxDepth; depth += sensorRange * 2) {
             int posY = Math.min(depth, maxDepth); // 确保不会超出边界
-            Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
-            Int2D leftEdgePosition = new Int2D(sensorRange, posY);
-
+            Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY+Parameters.defaultSensorRange);
+            Int2D leftEdgePosition = new Int2D(sensorRange, posY+Parameters.defaultSensorRange);
+            Int2D newRightEdgePosition = new Int2D(rightEdgePosition.x, rightEdgePosition.y);
+            Int2D newLeftEdgePosition = new Int2D(leftEdgePosition.x, leftEdgePosition.y);
             // 根据addRightFirst变量决定添加顺序，形成"S形"模式
             if (addRightFirst) {
-                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
-                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+                planner.getGoals().add(newRightEdgePosition);
+                planner.getGoals().add(newLeftEdgePosition);
             } else {
-                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
-                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+                planner.getGoals().add(newLeftEdgePosition);
+                planner.getGoals().add(newRightEdgePosition);
             }
             
-            if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
-                if (addRightFirst) {
-                    planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
-                } else {
-                    planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
-                }
-            }
-            // Toggle the addition order for the next iteration
             addRightFirst = !addRightFirst;
+        }
+        // Check if we need to add the last row
+        if (depth - sensorRange * 2 < maxDepth) {
+            int posY = maxDepth;
+            Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
+            Int2D leftEdgePosition = new Int2D(sensorRange, posY);
+            Int2D newRightEdgePosition = new Int2D(rightEdgePosition.x, rightEdgePosition.y);
+            Int2D newLeftEdgePosition = new Int2D(leftEdgePosition.x, leftEdgePosition.y);
+            // 根据addRightFirst变量决定添加顺序，形成"S形"模式
+            if (addRightFirst) {
+                planner.getGoals().add(newRightEdgePosition);
+                planner.getGoals().add(newLeftEdgePosition);
+            } else {
+                planner.getGoals().add(newLeftEdgePosition);
+                planner.getGoals().add(newRightEdgePosition);
+            }
         }
     }
 
@@ -234,6 +253,30 @@ public class AgentLZH extends TWAgent {
             if (Math.abs(deltaY) <= this.repulsionRange) {
                 TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
                 scores.merge(verticalDir, -this.RepulsiveConstant / (Math.abs(deltaY)+1), Double::sum);
+            }
+        }
+    }
+
+    // 检查感知区域是否超出地图边界，如果超出，将方向得分设置为0
+    // 原因：如果agent的感知区域超出地图边界，这一步就变得多余，
+    private void perceptionAreaOutOfBounds(Map<TWDirection, Double> scores) {
+        for (TWDirection direction : new HashSet<>(scores.keySet())) {
+            int checkX = this.x + direction.dx * (1 + Parameters.defaultSensorRange);
+            int checkY = this.y + direction.dy * (1 + Parameters.defaultSensorRange);
+            if (checkMapOutofBound(checkX, checkY)) {
+                // System.out.println("Direction " + direction + " is out of bounds!");
+                scores.put(direction, 0.0);
+            }
+        }
+    }
+
+    // 检测附近是否有障碍物，如果距离差的是2，垂直方向的，就直接设为0
+    private void checkObstacles(Map<TWDirection, Double> scores) {
+        for (TWDirection direction : scores.keySet()) {
+            int newX = this.x + 2 * direction.dx;
+            int newY = this.y + 2 * direction.dy;
+            if (!this.checkMapOutofBound(newX, newY) && this.memory.isCellBlocked(newX, newY)) {
+                scores.put(direction, 0.0);
             }
         }
     }
@@ -302,6 +345,14 @@ public class AgentLZH extends TWAgent {
         double minScore = Collections.min(directionScores.values());
         directionScores.replaceAll((dir, score) -> score + Math.max(-minScore, 0));
 
+        // Remove unwanted directions if they are out of bounds or blocked
+        //print every score
+        // directionScores.forEach((dir, score) -> System.out.println(dir + ": " + score));
+        perceptionAreaOutOfBounds(directionScores);
+        checkObstacles(directionScores);
+        // directionScores.forEach((dir, score) -> System.out.println(dir + ": " + score));
+        // checkObstacles(directionScores);
+
         if (!directionScores.isEmpty()) {
             TWDirection selectedDirection = selectDirectionWithWeights(directionScores, x, y);
             updateRecentLocation(selectedDirection);
@@ -340,7 +391,8 @@ public class AgentLZH extends TWAgent {
         if (totalWeight == 0) {
             return directions.get(new Random().nextInt(directions.size()));
         }
-        double random = Math.random() * totalWeight;
+        double randomValue = Math.random() * (1 - (1-this.exploration_param)) + (1-this.exploration_param);
+        double random = randomValue* totalWeight;
         double cumulativeWeight = 0.0;
         for (int i = 0; i < directions.size(); i++) {
             cumulativeWeight += weights.get(i);
@@ -391,13 +443,18 @@ public class AgentLZH extends TWAgent {
         // Check if the target is a TWTile, then consider the agent's carriedTiles if it's less than 3
         return this.memory.neighbouringAgents.stream()
             .anyMatch(agent -> {
+                int agentIndex = this.memory.neighbouringAgents.indexOf(agent);
+                int carriedTiles = this.memory.getCarriedTiles(agentIndex);
                 // Check if the target is an instance of TWTile
                 if (target instanceof TWTile) {
-                    int agentIndex = this.memory.neighbouringAgents.indexOf(agent);
-                    int carriedTiles = this.memory.getCarriedTiles(agentIndex);
                     return carriedTiles < 3 && agent.getDistanceTo(target) < this.getDistanceTo(target);
-                } else {
-                    // If the target is not a TWTile, only compare the distances
+                }
+                // Added correct check for another type, assume TWHole as suggested
+                else if (target instanceof TWHole) {
+                    return carriedTiles > 0 && agent.getDistanceTo(target) < this.getDistanceTo(target);
+                }
+                // If the target is neither TWTile nor TWHole, only compare the distances
+                else {
                     return agent.getDistanceTo(target) < this.getDistanceTo(target);
                 }
             });
@@ -555,9 +612,9 @@ public class AgentLZH extends TWAgent {
             
             // 如果自身memory没有fuelstation位置和消息中有fuelstation位置，更新memory
             if(this.memory.getFuelStation()== null && fuelStation != null) {
-                System.out.println(this.name + "updating fuel station memory");
+                // System.out.println(this.name + "updating fuel station memory");
                 this.memory.setFuelStation(fuelStation.x, fuelStation.y);
-                System.out.println(this.memory.getFuelStation());
+                // System.out.println(this.memory.getFuelStation());
             }
 
             // 如果当前消息包含感知物体，则将感知物体和Agent合并一起更新到memory
@@ -648,7 +705,7 @@ public class AgentLZH extends TWAgent {
         }
         // 如果找到了油站，而且自己要没有油了，就去加油
         // 这边可以设置一个动态阈值
-        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < 2.5* this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
+        else if ((memory.getFuelStation() != null) && (this.getFuelLevel() < 1.5* this.getDistanceTo(memory.getFuelStation().getX(), memory.getFuelStation().getY()))){
             mode = Mode.REFUEL;
             System.out.println("Setting mode to refuel");
         }
