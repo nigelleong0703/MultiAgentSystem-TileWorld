@@ -154,7 +154,7 @@ public class TWEnvironment extends SimState implements Steppable {
                 Parameters.defaultFuelLevel));
         Int2D pos2 = this.generateRandomLocation();
         assert (this.isInBounds(pos2.getX(), pos2.getY()));
-        createAgent(new AgentFZM(1, "agent2", pos2.getX(), pos2.getY(), this,
+        createAgent(new AgentLZH(1, "agent2", pos2.getX(), pos2.getY(), this,
                 Parameters.defaultFuelLevel));
         Int2D pos3 = this.generateRandomLocation();
         assert (this.isInBounds(pos3.getX(), pos3.getY()));

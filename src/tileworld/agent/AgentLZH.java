@@ -58,11 +58,12 @@ public class AgentLZH extends TWAgent {
     // private TWAgentSensor sensor;
     public boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
-    private double RepulsiveConstant = 2;
-    private int repulsionRange = 20;
+    // private double RepulsiveConstant = 2;
+    private double RepulsiveConstant = this.getEnvironment().getxDimension() / 2;
+    private int repulsionRange = 20; //20
     Deque<Int2D> recentPosition = new LinkedList<>();
     private int recentWindowHistoryLength = 20;
-    private int sourceAttraction = 3;
+    private int sourceAttraction = this.getEnvironment().getxDimension();
     private Int2D sourceAttractionPoint = null;
     private double RecentRange = 20.0;
     private double recentConstant = 3;
@@ -226,12 +227,12 @@ public class AgentLZH extends TWAgent {
 
             if (Math.abs(deltaX) <= this.repulsionRange) {
                 TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
-                scores.merge(horizontalDir, -this.RepulsiveConstant * Math.abs(deltaX), Double::sum);
+                scores.merge(horizontalDir, -this.RepulsiveConstant / (Math.abs(deltaX)+1), Double::sum);
             }
 
             if (Math.abs(deltaY) <= this.repulsionRange) {
                 TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
-                scores.merge(verticalDir, -this.RepulsiveConstant * Math.abs(deltaY), Double::sum);
+                scores.merge(verticalDir, -this.RepulsiveConstant / (Math.abs(deltaY)+1), Double::sum);
             }
         }
     }
@@ -282,7 +283,7 @@ public class AgentLZH extends TWAgent {
         
         // Int2D sourceAttraction = findNearestBase(this.memory.findLowestNZone(5), this.memory.getAgentPositionAll());
         // print out the agent name + source
-        System.out.println(this.name + " source: " + sourceAttraction);
+        System.out.println(this.name + " source: " + sourceAttractionPoint);
 
         // Initialize the direction scores
         directionScores.put(TWDirection.N, 0.0);

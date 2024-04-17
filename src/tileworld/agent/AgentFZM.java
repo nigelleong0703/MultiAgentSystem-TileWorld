@@ -28,11 +28,12 @@ public class AgentFZM extends TWAgent {
     private MyMemory memory;
     public boolean getAllPosition = false;
     private int updateAllInitialPosition = 0;
-    private double RepulsiveConstant = 2;
-    private int repulsionRange = 20;
+    // private double RepulsiveConstant = 2;
+    private double RepulsiveConstant = this.getEnvironment().getxDimension() / 2.0;
+    private int repulsionRange = 20; 
     Deque<Int2D> recentPosition = new LinkedList<>();
     private int recentWindowHistoryLength = 20;
-    private int sourceAttraction = 3;
+    private int sourceAttraction = this.getEnvironment().getxDimension();
     private Int2D sourceAttractionPoint = null;
     private double RecentRange = 20.0;
     private double recentConstant = 3;
@@ -128,22 +129,6 @@ public class AgentFZM extends TWAgent {
         Int2D nearestBase = findNearestBase(basePos, this.memory.getAgentPositionAll());
         System.out.println(this.name + ", I need to go to: " + nearestBase);
 
-        // // 添加目标位置
-        // // int stripDepth = Parameters.yDimension / 5;
-        // int sensorRange = Parameters.defaultSensorRange;
-        // int maxDepth = Parameters.yDimension - sensorRange - 1;
-        // for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
-        //     int posY = Math.min(depth, maxDepth); // 确保不会超出边界
-        //     Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
-        //     Int2D leftEdgePosition = new Int2D(sensorRange, posY);
-
-        //     // 添加从基地向右侧和左侧的目标位置
-        //     planner.getGoals().add(getPositionAdd(nearestBase, new Int2D(0, posY)));
-        //     planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
-        //     if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
-        //         planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
-        //     }
-        // }
         // 添加目标位置
         int sensorRange = Parameters.defaultSensorRange;
         int maxDepth = Parameters.yDimension - sensorRange - 1;
@@ -194,19 +179,19 @@ public class AgentFZM extends TWAgent {
     private void applyRepulsion(int x, int y, Map<TWDirection, Double> scores) {
         for (int i = 0; i < this.memory.getAgentPositionAll().length; i++) {
             if (i == this.index)
-                continue;
+                continue;   
             Int2D agentPos = this.memory.getAgentPositionAll()[i];
             double deltaX = x - agentPos.x;
             double deltaY = y - agentPos.y;
 
             if (Math.abs(deltaX) <= this.repulsionRange) {
                 TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
-                scores.merge(horizontalDir, -this.RepulsiveConstant * Math.abs(deltaX), Double::sum);
+                scores.merge(horizontalDir, -this.RepulsiveConstant / (Math.abs(deltaX)+1), Double::sum);
             }
 
             if (Math.abs(deltaY) <= this.repulsionRange) {
                 TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
-                scores.merge(verticalDir, -this.RepulsiveConstant * Math.abs(deltaY), Double::sum);
+                scores.merge(verticalDir, -this.RepulsiveConstant / (Math.abs(deltaY)+1), Double::sum);
             }
         }
     }
