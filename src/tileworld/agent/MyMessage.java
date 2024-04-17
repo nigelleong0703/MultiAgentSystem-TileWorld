@@ -107,4 +107,13 @@ public class MyMessage extends Message{
         }
         else return null;
     }
+    public void addCarriedTiles(int carriedTilesSize){
+        this.addMessage("carriedTilesSize", carriedTilesSize);
+    }
+    public int getCarriedTiles(){
+        if (this.messages.containsKey("carriedTilesSize")){
+            return (int) this.messages.get("carriedTilesSize");
+        }
+        else return -1;
+    }
 }

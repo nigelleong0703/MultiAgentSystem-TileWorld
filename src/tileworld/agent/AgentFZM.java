@@ -63,10 +63,11 @@ public class AgentFZM extends TWAgent {
         this.memory.getMemoryGrid().getNeighborsMaxDistance(x, y, Parameters.defaultSensorRange, false, sensedObjects,
                 objectXCoords, objectYCoords);
 
-        System.out.println(this.memory.getFuelStation());
+        // System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
+        message.addCarriedTiles(this.carriedTiles.size());
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
-        System.out.println(message);
+        // System.out.println(message);
         this.getEnvironment().receiveMessage(message);
     }
 
@@ -346,8 +347,22 @@ public class AgentFZM extends TWAgent {
     }
 
     private boolean isAnyAgentCloser(TWEntity target) {
+        // return this.memory.neighbouringAgents.stream()
+        //         .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+
+        // Check if the target is a TWTile, then consider the agent's carriedTiles if it's less than 3
         return this.memory.neighbouringAgents.stream()
-                .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+            .anyMatch(agent -> {
+                // Check if the target is an instance of TWTile
+                if (target instanceof TWTile) {
+                    int agentIndex = this.memory.neighbouringAgents.indexOf(agent);
+                    int carriedTiles = this.memory.getCarriedTiles(agentIndex);
+                    return carriedTiles < 3 && agent.getDistanceTo(target) < this.getDistanceTo(target);
+                } else {
+                    // If the target is not a TWTile, only compare the distances
+                    return agent.getDistanceTo(target) < this.getDistanceTo(target);
+                }
+            });
     }
 
     private void broadcastNewTarget(TWEntity target) {
@@ -462,6 +477,11 @@ public class AgentFZM extends TWAgent {
             }
             if (this.updateAllInitialPosition == 5) {
                 this.getAllPosition = true;
+            }
+
+            int carriedTiles = myMessage.getCarriedTiles();
+            if (carriedTiles != -1) {
+                this.memory.updateCarriedTiles(agentIndex, carriedTiles);
             }
 
             // 先看sourceAttraction是不是null, 再获取自己的sourceAttraction地点

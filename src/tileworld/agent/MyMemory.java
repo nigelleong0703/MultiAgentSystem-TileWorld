@@ -38,6 +38,7 @@ public class MyMemory extends TWAgentWorkingMemory {
     private int zoneWidth;
     private int zoneHeight;
 	private double headmapDecayfactor = 0.9;
+	private int[] agentsCarriedTiles = new int[5];
 
 	protected Int2D fuelStation;
 	
@@ -622,6 +623,14 @@ public class MyMemory extends TWAgentWorkingMemory {
 			return (TWObject) objects[x][y].getO();
 		}
 		return null;
+	}
+
+	public void updateCarriedTiles(int index, int num){
+		this.agentsCarriedTiles[index] = num;
+	}
+
+	public int getCarriedTiles(int index){
+		return this.agentsCarriedTiles[index];
 	}
 	
 	public static void main(String[] args) {

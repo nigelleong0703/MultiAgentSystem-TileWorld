@@ -100,11 +100,12 @@ public class AgentLZH extends TWAgent {
         
         // 发送消息位置
         // 油站位置
-        System.out.println(this.memory.getFuelStation());
+        // System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
+        message.addCarriedTiles(this.carriedTiles.size());
         // sensedObjects位置和自身位置
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
-        System.out.println(message);
+        // System.out.println(message);
 
         // 发到environment
         this.getEnvironment().receiveMessage(message);
@@ -383,8 +384,23 @@ public class AgentLZH extends TWAgent {
     }
 
     private boolean isAnyAgentCloser(TWEntity target) {
+        // 假设 target是一个TWTile 那就要考虑那个agent的carriedTiles是不是小于3
+        // return this.memory.neighbouringAgents.stream()
+        //         .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+
+        // Check if the target is a TWTile, then consider the agent's carriedTiles if it's less than 3
         return this.memory.neighbouringAgents.stream()
-                .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+            .anyMatch(agent -> {
+                // Check if the target is an instance of TWTile
+                if (target instanceof TWTile) {
+                    int agentIndex = this.memory.neighbouringAgents.indexOf(agent);
+                    int carriedTiles = this.memory.getCarriedTiles(agentIndex);
+                    return carriedTiles < 3 && agent.getDistanceTo(target) < this.getDistanceTo(target);
+                } else {
+                    // If the target is not a TWTile, only compare the distances
+                    return agent.getDistanceTo(target) < this.getDistanceTo(target);
+                }
+            });
     }
 
     private void broadcastNewTarget(TWEntity target) {
@@ -449,27 +465,27 @@ public class AgentLZH extends TWAgent {
         // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold, 就可以做别的事情（collect or fill)
         if (this.getFuelLevel() > verysafeFuelThreshold){
             // 先看有没有有没有同时有tile and hole，如果同时有再看距离
-            // if (targettile!=null && targethole!=null){
-            //     boolean isTileCloser = this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY());
-            //     if (this.carriedTiles.size()< 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
-            //         this.compareAndSetTarget(targettile, 0);
-            //     }
-            //     else if (!isTileCloser && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
-            //         this.compareAndSetTarget(targethole, 0);
-            //     }
-            // }
-            // // 如果只有目标tile
-            // else if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
-            //     this.compareAndSetTarget(targettile, 0);
-            // } else if (targethole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targethole, verysafeFuelThreshold)) {
-            //     this.compareAndSetTarget(targethole, 0);
-            // }
-            // // 什么都没有就不用做extra
-            if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
+            if (targettile!=null && targethole!=null){
+                boolean isTileCloser = this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY());
+                if (this.carriedTiles.size()< 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
+                    this.compareAndSetTarget(targettile, 0);
+                }
+                else if (!isTileCloser && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
+                    this.compareAndSetTarget(targethole, 0);
+                }
+            }
+            // 如果只有目标tile
+            else if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
                 this.compareAndSetTarget(targettile, 0);
             } else if (targethole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targethole, verysafeFuelThreshold)) {
                 this.compareAndSetTarget(targethole, 0);
             }
+            // // 什么都没有就不用做extra
+            // if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
+            //     this.compareAndSetTarget(targettile, 0);
+            // } else if (targethole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targethole, verysafeFuelThreshold)) {
+            //     this.compareAndSetTarget(targethole, 0);
+            // }
         }
     }
 
@@ -519,6 +535,12 @@ public class AgentLZH extends TWAgent {
             }
             if (this.updateAllInitialPosition == 5) {
                 this.getAllPosition = true;
+            }
+
+            // update other agent carried tiles
+            int carriedTiles = myMessage.getCarriedTiles();
+            if (carriedTiles != -1) {
+                this.memory.updateCarriedTiles(agentIndex, carriedTiles);
             }
 
             // 先看sourceAttraction是不是null, 再获取自己的sourceAttraction地点
