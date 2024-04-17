@@ -39,6 +39,7 @@ import java.util.Random;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 
 public class AgentLZH extends TWAgent {
     private String name;
@@ -82,7 +83,6 @@ public class AgentLZH extends TWAgent {
     }
     public AgentLZH(int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(xpos, ypos, env, fuelLevel);
-        // this.planner = new AstarPathGenerator(this.getEnvironment(), this, mapsizeX+mapsizeY);
         this.planner = new TWPlannerLZH(this);
     }
 
@@ -101,16 +101,13 @@ public class AgentLZH extends TWAgent {
         // 油站位置
         System.out.println(this.memory.getFuelStation());
         message.addFuelStationPosition(this.memory.getFuelStation());
-
         // sensedObjects位置和自身位置
         message.addSensedObjects(sensedObjects, new Int2D(x, y));
         System.out.println(message);
 
         // 发到environment
         this.getEnvironment().receiveMessage(message);
-    }
-
-    
+    }    
 
     private ArrayList<TWEntity> detectObjectNoCollision(PriorityQueue<TWEntity> neighborObjects, List<TWAgent> neighbouringAgents) {
         // TODO Auto-generated method stub
@@ -133,44 +130,32 @@ public class AgentLZH extends TWAgent {
         return (tiles.size() > 0) ? tiles: null;
     }
 
-
     private Int2D getPositionAdd(Int2D base, Int2D position) {
         return new Int2D (base.x + position.x, base.y + position.y) ;
     }
 
-    // 这个逻辑不是很对，需要改，这个是分层之后往回走来走去扫描
-
     public Int2D findNearestBase(Int2D [] basePos, Int2D [] neighbouringAgents) {
         // This function is to compare distance between agent and other agent , and determine my agent should go which starting point
-        // Int2D myagentPosition = new Int2D(this.getX(), this.getY());
-        int numAgents = 5;
-        int numBases = 5;
-        double [][] costMatrix = new double[numAgents][numBases];
+        int agentCount = neighbouringAgents.length;
+        int baseCount = basePos.length;
+        double[][] costMatrix = new double[agentCount][baseCount];
 
-        for (int i = 0; i < numAgents; i++){
-            // TWAgent agent = neighbouringAgents.get(i);
-            for (int j = 0; j < numBases; j++){
-                costMatrix[i][j] = Math.abs(neighbouringAgents[i].x-basePos[j].x) + Math.abs(neighbouringAgents[i].y-basePos[j].y);
-                // costMatrix[i][j] = agent.getDistanceTo(basePos[j].x, basePos[j].y);
+        for (int i = 0; i < agentCount; i++){
+            for (int j = 0; j < baseCount; j++){
+                costMatrix[i][j] = Math.hypot(neighbouringAgents[i].x - basePos[j].x, neighbouringAgents[i].y - basePos[j].y);
             }
         }
 
-        // Apply Hungarian Algorithm to find the best assignment
         HungarianAlgorithm hungarianAlgorithm = new HungarianAlgorithm(costMatrix);
         int[] result = hungarianAlgorithm.execute();
-
         // Find the best assignment
-        Int2D[] optimalBases = new Int2D[numAgents];
-        for (int i = 0; i<result.length; i++){
-            optimalBases[i] = basePos[result[i]];
-        }
+        Int2D[] optimalBases = Arrays.stream(result).mapToObj(i -> basePos[i]).toArray(Int2D[]::new);
         return optimalBases[this.index];
     }
 
     public void addGoalsForFuelStation() {
         System.out.println("Assigning search area for " + this.name);
-        planner.voidGoals();
-        planner.voidPlan();
+        planner.voidGoals(); // 清楚当前目标
         Int2D [] basePos = {
             new Int2D(0,0),
             new Int2D(0,Parameters.yDimension/5),
@@ -179,130 +164,104 @@ public class AgentLZH extends TWAgent {
             new Int2D(0,(Parameters.yDimension/5) * 4),
         };
         // Instead of 去到指定的区域，找一个更接近的区域去寻找
-        Int2D base = findNearestBase(basePos, this.memory.getAgentPositionAll());
-        System.out.println(this.name + ", I need to go to: " + base);
-        // Int2D base = basePos[this.index];
-        Int2D position = new Int2D(Parameters.defaultSensorRange, Parameters.defaultSensorRange);
-        int depth= Parameters.defaultSensorRange;
+        Int2D nearestBase = findNearestBase(basePos, this.memory.getAgentPositionAll());
+        System.out.println(this.name + ", I need to go to: " + nearestBase);
 
-        while(depth < Parameters.yDimension/5){
-            int posX = position.x;
-            int posY = position.y;
-            planner.getGoals().add(getPositionAdd(base, position));
+        // 添加目标位置
+        int sensorRange = Parameters.defaultSensorRange;
+        int maxDepth = Parameters.yDimension - sensorRange - 1;
+        boolean addRightFirst = true;
+        for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
+            int posY = Math.min(depth, maxDepth); // 确保不会超出边界
+            Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
+            Int2D leftEdgePosition = new Int2D(sensorRange, posY);
 
-            // point1 位于当前基地的右侧， 与当前基地的距离为Paramaeters.defaultSensorRange, 与环境的右边缘的距离为Parameters.defaultSensorRange
-            posX += Parameters.xDimension - Parameters.defaultSensorRange-1;
-            position = new Int2D(posX,position.y);
-            planner.getGoals().add(getPositionAdd(base, position));
-
-            // agent 的深度， 从最顶部下来的深度(中心位置)
-            depth = depth + Parameters.defaultSensorRange * 2 + 1;
-            // 在最后一行，如果往下走的距离会超过strip，则让中心刚刚好达到最底下的边界
-            if(depth >= Parameters.yDimension/5){
-                //
-                posY= Parameters.yDimension/5 - 1- Parameters.defaultSensorRange;
-                depth = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
-                position = new Int2D(position.x, posY);
-                planner.getGoals().add(getPositionAdd(base, position));
-
-                //
-                posX = Parameters.defaultSensorRange;
-                position = new Int2D(posX,position.y);
-                planner.getGoals().add(getPositionAdd(base, position));
-                break;
-            }
-
-            // Point 2
-            posY+= Parameters.defaultSensorRange * 2 + 1;
-            position = new Int2D(position.x, posY);
-            planner.getGoals().add(getPositionAdd(base, position));
-            
-            //point 3 
-            posX = Parameters.defaultSensorRange;
-            position = new Int2D(posX, position.y);
-            planner.getGoals().add(getPositionAdd(base, position));
-
-            depth += Parameters.defaultSensorRange * 2 + 1;
-
-            //往下走一层，如果也是超过边界，则将中心刚刚好达到最底下的边界
-            if(depth > Parameters.yDimension/5){
-                posY = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
-                posX = Parameters.defaultSensorRange;
-                depth = Parameters.yDimension/5 - 1 - Parameters.defaultSensorRange;
-                position = new Int2D(posX, posY);
-                planner.getGoals().add(getPositionAdd(base, position));
-                break;
+            // 根据addRightFirst变量决定添加顺序，形成"S形"模式
+            if (addRightFirst) {
+                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+            } else {
+                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
             }
             
-            posY += Parameters.defaultSensorRange * 2 +1;
-            position = new Int2D(position.x, posY);
-            planner.getGoals().add(getPositionAdd(base, position));
+            if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
+                if (addRightFirst) {
+                    planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+                } else {
+                    planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+                }
+            }
+            // Toggle the addition order for the next iteration
+            addRightFirst = !addRightFirst;
         }
     }
 
+    // 计算指向源点的吸引力
     private void applySource(int x, int y, Int2D sourceAttraction, Map<TWDirection, Double> scores){
         // 根据自身的位置和需要到达的sourceAttraction的位置，计算出每个方向的score
-        ArrayList<TWDirection> directionToSource = getDirectionFromPositions(x, y, sourceAttraction.x, sourceAttraction.y);
-        for (TWDirection dir : directionToSource){
-            if (scores.containsKey(dir)){
-                // 如果是E,W 算Attraction就用x, 如果是N,S 算Attraction就用y
-                if (dir == TWDirection.E || dir == TWDirection.W){
-                    scores.put(dir, scores.get(dir) +  this.sourceAttraction * Math.abs(x - sourceAttraction.x));
-                }
-                else{
-                    scores.put(dir, scores.get(dir) +  this.sourceAttraction * Math.abs(y - sourceAttraction.y));
-                }
-            }
+        double deltaX = x - sourceAttraction.x;
+        double deltaY = y - sourceAttraction.y;
+
+        if (deltaX != 0) {
+            TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
+            scores.merge(horizontalDir, this.sourceAttraction * Math.abs(deltaX), Double::sum);
+        }
+
+        if (deltaY != 0) {
+            TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
+            scores.merge(verticalDir, this.sourceAttraction * Math.abs(deltaY), Double::sum);
         }
     }
 
+    // 计算周围其他智能体的排斥力
     private void applyRepulsion(int x, int y, Map<TWDirection, Double> scores){
-        Int2D [] allAgentPosition = this.memory.getAgentPositionAll();
         for (int i=0; i<5; i++){
             if (i == this.index){
                 continue;
             }
-            Int2D agent = allAgentPosition[i];
-            ArrayList<TWDirection> directionToAgent = getDirectionFromPositions(x, y, agent.x, agent.y);
-            for (TWDirection dir : directionToAgent){
-                if (scores.containsKey(dir)){
-                    // 如果是E,W 算repulsion force就用x, 如果是N,S 算repulsion force就用y
-                    if (dir == TWDirection.E || dir == TWDirection.W){
-                        scores.put(dir, scores.get(dir) -  this.RepulsiveConstant * Math.abs(x - agent.x));
-                    }
-                    else{
-                        scores.put(dir, scores.get(dir) -  this.RepulsiveConstant * Math.abs(y - agent.y));
-                    }
-                }
+            Int2D agentPos = this.memory.getAgentPositionAll()[i];
+            double deltaX = x - agentPos.x;
+            double deltaY = y - agentPos.y;
+
+            if (Math.abs(deltaX) <= this.repulsionRange) {
+                TWDirection horizontalDir = deltaX > 0 ? TWDirection.W : TWDirection.E;
+                scores.merge(horizontalDir, -this.RepulsiveConstant * Math.abs(deltaX), Double::sum);
+            }
+
+            if (Math.abs(deltaY) <= this.repulsionRange) {
+                TWDirection verticalDir = deltaY > 0 ? TWDirection.N : TWDirection.S;
+                scores.merge(verticalDir, -this.RepulsiveConstant * Math.abs(deltaY), Double::sum);
             }
         }
     }
 
+    // 结合排斥力和历史移动惩罚更新方向得分
     private void applyRepulsionAndHistory(int x, int y, Map<TWDirection, Double> scores) {
         applyRepulsion(x, y, scores);
         updateDirectionScoresWithHistory(scores);  // Apply a penalty of 1 for recent moves
     }
 
-    private double calculateHistoryPenalty(Int2D newPosition){
-        double penalty = 0.0;
-        for (Int2D historyPosition : recentPosition) {
-            double distance = Math.sqrt(Math.pow(newPosition.x - historyPosition.x, 2) +
-                                        Math.pow(newPosition.y - historyPosition.y, 2));
-            if (distance < this.RecentRange) {  // Define a "proximity zone" radius
-                penalty += (this.RecentRange - distance);  // The closer it is, the higher the penalty
-            }
-        }
-        return penalty;
+    // 计算历史移动的惩罚
+    private double calculateHistoryPenalty(Int2D newPosition) {
+        return recentPosition.stream()
+                .mapToDouble(p -> {
+                    double distance = newPosition.distance(p);
+                    return distance < this.RecentRange ? (this.RecentRange - distance) : 0;
+                })
+                .sum();
     }
 
+    // 更新方向得分，考虑历史移动
     private void updateDirectionScoresWithHistory(Map<TWDirection, Double> scores) {
-        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
-            Int2D newPosition = new Int2D(this.x + entry.getKey().dx, this.y+ entry.getKey().dy);
+        scores.forEach((dir, score) -> {
+            Int2D newPosition = new Int2D(this.x + dir.dx, this.y + dir.dy);
             double penalty = calculateHistoryPenalty(newPosition);
-            scores.put(entry.getKey(), entry.getValue() - this.recentConstant * penalty);
-        }
+            scores.put(dir, score - this.recentConstant * penalty);
+        });
     }
 
+    // 更新最近位置记录
     public void updateRecentLocation(TWDirection selectedDirection){
         if (recentPosition.size() >= this.recentWindowHistoryLength) {  // Limit to the last 5 moves
             recentPosition.poll();  // Remove the oldest
@@ -310,40 +269,9 @@ public class AgentLZH extends TWAgent {
         recentPosition.add(getPositionAdd(new Int2D(this.x, this.y), new Int2D(selectedDirection.dx, selectedDirection.dy)));  // Add the newest
     }
 
-    public ArrayList<TWDirection> getDirectionFromPositions(int x1, int y1, int x2, int y2) {
-        // 对比 agent1 和agent 2的位置，范围一组方向
-        int dx = x2 - x1; //说明agent2 在agent 1的右边
-        int dy = y2 - y1; //说明agent2 在agent 1的下边
-
-        // Repulsion 只在一个range内有效，超过了就吧either dx or dy 清0
-        if (Math.abs(dx) > this.repulsionRange){
-            dx = 0;
-        }
-        if (Math.abs(dy) > this.repulsionRange){
-            dy = 0;
-        }
-
-        // return a list of direction, to indicate the direction of the agent
-        ArrayList<TWDirection> directions = new ArrayList<TWDirection>();
-
-        // 先看是不是在右边，如果是需要在direction增加twdirection右边, E，如果不是就再看是不是在左边，如果是在左边就在direction增加twdirection左边，W，都不是就pass
-        if (dx > 0) {
-            directions.add(TWDirection.E); // East
-        } else if (dx < 0) {
-            directions.add(TWDirection.W); // West
-        }
-
-        // 再看是不是在下边，如果是需要在direction增加twdirection下边, S，如果不是就再看是不是在上边，如果是在上边就在direction增加twdirection上边，N，都不是就pass
-        if (dy > 0) {
-            directions.add(TWDirection.S); // South
-        } else if (dy < 0) {
-            directions.add(TWDirection.N); // North
-        }
-        return directions;
-    }
-
     private boolean checkMapOutofBound(int x, int y){
-        return x < 0 || x >= this.getEnvironment().getxDimension() || y < 0 || y >= this.getEnvironment().getyDimension();
+        TWEnvironment env = this.getEnvironment();
+        return x < 0 || x >= env.getxDimension() || y < 0 || y >= env.getyDimension();
     }
 
     private TWThought RandomMoveThought() {
@@ -363,23 +291,18 @@ public class AgentLZH extends TWAgent {
         directionScores.put(TWDirection.W, 0.0);
 
         if (sourceAttractionPoint != null){
-            // Apply source attraction (attraction to the source point
             applySource(x, y, sourceAttractionPoint, directionScores);
         }
         applyRepulsionAndHistory(x, y, directionScores);
+
         // 调整score所以不会有负数出现
         // Find the minimum score
         double minScore = Collections.min(directionScores.values());
-        if (minScore < 0) {
-            double offset = Math.abs(minScore);
-            for (Map.Entry<TWDirection, Double> entry : directionScores.entrySet()) {
-                directionScores.put(entry.getKey(), entry.getValue() + offset);
-            }
-        }
+        directionScores.replaceAll((dir, score) -> score + Math.max(-minScore, 0));
+
         if (!directionScores.isEmpty()) {
             TWDirection selectedDirection = selectDirectionWithWeights(directionScores, x, y);
             updateRecentLocation(selectedDirection);
-
             return new TWThought(TWAction.MOVE, selectedDirection);
         } else {
             System.out.println("No where to go!");
@@ -392,114 +315,87 @@ public class AgentLZH extends TWAgent {
         List<TWDirection> validDirections = new ArrayList<>();
         List<Double> weights = new ArrayList<>();
     
-        for (Map.Entry<TWDirection, Double> entry : scores.entrySet()) {
-            int newX = x + entry.getKey().dx;
-            int newY = y + entry.getKey().dy;
-            if (!checkMapOutofBound(newX, newY)){
-                if(!this.memory.isCellBlocked(newX, newY)){
-                    validDirections.add(entry.getKey());
-                    weights.add(entry.getValue()+1);
-                }
+        scores.forEach((direction, score) -> {
+            int newX = x + direction.dx;
+            int newY = y + direction.dy;
+            if (!checkMapOutofBound(newX, newY) && !this.memory.isCellBlocked(newX, newY)) {
+                validDirections.add(direction);
+                weights.add(score);
             }
-        }
-    
+        });
+
         // If no valid directions are available, return TWDirection.Z
         if (validDirections.isEmpty()) {
             System.out.println("No walkable direction available.");
             return TWDirection.Z;
         }
-     
-        // Normalize weights and select based on the weighted random
+
+        return weightedRandomSelection(validDirections, weights);
+    }
+
+    private TWDirection weightedRandomSelection(List<TWDirection> directions, List<Double> weights) {
         double totalWeight = weights.stream().mapToDouble(Double::doubleValue).sum();
         if (totalWeight == 0) {
-            // If all weights are zero but we have valid directions, choose randomly among them
-            return validDirections.get(new Random().nextInt(validDirections.size()));
+            return directions.get(new Random().nextInt(directions.size()));
         }
-    
         double random = Math.random() * totalWeight;
-//        double random = totalWeight;
         double cumulativeWeight = 0.0;
-        for (int i = 0; i < validDirections.size(); i++) {
+        for (int i = 0; i < directions.size(); i++) {
             cumulativeWeight += weights.get(i);
             if (cumulativeWeight >= random) {
-                return validDirections.get(i);
+                return directions.get(i);
             }
         }
-    
-        // Fallback in case of rounding errors, should not normally be reached
-        return validDirections.get(validDirections.size() - 1);
+        return directions.get(directions.size() - 1);
     }
 
 
     private Int2D generateRandomNearCell(Int2D goalPos) {
-        // TODO Auto-generated method stub
-        ArrayList<Int2D> dirs = new ArrayList<Int2D>();
-        int x = goalPos.getX();
-        int y = goalPos.getY();
+        List<Int2D> potentialPositions = Arrays.asList(
+                new Int2D(goalPos.x, goalPos.y - 1),
+                new Int2D(goalPos.x, goalPos.y + 1),
+                new Int2D(goalPos.x + 1, goalPos.y),
+                new Int2D(goalPos.x - 1, goalPos.y));
+        List<Int2D> validPositions = potentialPositions.stream()
+                .filter(p -> !checkMapOutofBound(p.x, p.y) && !this.memory.isCellBlocked(p.x, p.y))
+                .collect(Collectors.toList());
 
-        if ((y-1) >= 0
-                && !this.memory.isCellBlocked(x, y-1)) {
-            dirs.add(new Int2D(x, y-1));
-        }
-        if ((y+1) < this.getEnvironment().getyDimension()
-                && !this.memory.isCellBlocked(x, y+1)) {
-            dirs.add(new Int2D(x, y+1));
-        }
-        if ((x+1) < this.getEnvironment().getxDimension()
-                && !this.memory.isCellBlocked(x+1, y)) {
-            dirs.add(new Int2D(x+1, y));
-        }
-        if ((x-1) >= 0
-                && !this.memory.isCellBlocked(x-1, y)) {
-            dirs.add(new Int2D(x-1, y));
-        }
-
-        if (dirs.size() > 0) {
-            int random_num = this.getEnvironment().random.nextInt(dirs.size());
-            return dirs.get(random_num);
-        }
-        else {
+        if (validPositions.isEmpty()) {
             System.out.println("No where to go!");
             return null;
         }
+        return validPositions.get(new Random().nextInt(validPositions.size()));
     }
 
     // 对比然后增加进去goal里面
-    private void compareAndSetTarget(TWEntity target){
-        // 判断每个人的距离，如果有人比我更近，就不要去了
-        for (TWAgent agent : this.memory.neighbouringAgents){
-            if (agent.getDistanceTo(target) < this.getDistanceTo(target)){
-                return;
-            }
+    private void compareAndSetTarget(TWEntity target, int index) {
+        if (this.memory.getTargetGoalsList().contains(target) || isAnyAgentCloser(target)) {
+            return;
         }
-        // 如果没有人比我更近，就把这个target加进我的planner里面, 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
-        if (!this.memory.getTargetGoalsList().contains(target)){
+        // 如果index是有效的，我们会在特定的位置插入目标，否则添加到末尾
+        if (index >= 0 && index <= this.planner.getGoals().size()) {
+            this.planner.getGoals().add(index, new Int2D(target.getX(), target.getY()));
+        } else {
             this.planner.getGoals().add(new Int2D(target.getX(), target.getY()));
-            // 把target转换成bag, 消息broadcast出去
-            Bag targetGoal = new Bag();
-            targetGoal.add(target);
-            MyMessage message = new MyMessage(this.getName(), "");
-            message.addTargetGoal(targetGoal);
         }
+        broadcastNewTarget(target);
     }
 
-    private void compareAndSetTarget(TWEntity target, int index){
-        // 判断每个人的距离，如果有人比我更近，就不要去了
-        for (TWAgent agent : this.memory.neighbouringAgents){
-            if (agent.getDistanceTo(target) < this.getDistanceTo(target)){
-                return;
-            }
-        }
-        // 如果没有人比我更近，就把这个target加进我的planner里面, 再看是不是在this.memory.getTargetGoalsList里面，如果不是才可以加进planner.getGoals里
-        if (!this.memory.getTargetGoalsList().contains(target)){
-            this.planner.getGoals().add(index, new Int2D(target.getX(), target.getY()));
-            // 把target转换成bag, 消息broadcast出去
-            Bag targetGoal = new Bag();
-            targetGoal.add(target);
-            MyMessage message = new MyMessage(this.getName(), "");
-            message.addTargetGoal(targetGoal);
-            this.getEnvironment().receiveMessage(message);
-        }
+    private boolean isAnyAgentCloser(TWEntity target) {
+        return this.memory.neighbouringAgents.stream()
+                .anyMatch(agent -> agent.getDistanceTo(target) < this.getDistanceTo(target));
+    }
+
+    private void broadcastNewTarget(TWEntity target) {
+        Bag targetGoal = new Bag();
+        targetGoal.add(target);
+        MyMessage message = new MyMessage(this.getName(), "");
+        message.addTargetGoal(targetGoal);
+        this.getEnvironment().receiveMessage(message);
+    }
+
+    private void compareAndSetTarget(TWEntity target) {
+        compareAndSetTarget(target, this.planner.getGoals().size()); // 添加到目标列表末尾
     }
 
     private void sendCompletedGoal(TWEntity completedGoalEntity){
@@ -512,21 +408,29 @@ public class AgentLZH extends TWAgent {
         this.getEnvironment().receiveMessage(message);
     }
 
+    private TWTile checkTileInRange(TWTile tile) {
+        return (tile != null && this.getDistanceTo(tile) <= Parameters.defaultSensorRange) ? tile : null;
+    }
+
+    private TWHole checkHoleInRange(TWHole hole) {
+        return (hole != null && this.getDistanceTo(hole) > Parameters.defaultSensorRange) ? null : hole;
+    }
+
     private void FindFuelAddGoal(double verysafeFuelThreshold, TWTile targettile, TWHole targethole){
         // 先检查有没有targettile和targethole, 如果有，就要检查自己和这些东西的距离是不是在我的sensorrange范围里面， 不是直接skip
-        if (targettile != null && this.getDistanceTo(targettile) > Parameters.defaultSensorRange){
-            targettile = null;
-        }
-        if (targethole != null && this.getDistanceTo(targethole) > Parameters.defaultSensorRange){
-            targethole = null;
-        }
+        targettile = checkTileInRange(targettile);
+        targethole = checkHoleInRange(targethole);
         addGoalInMiddle(verysafeFuelThreshold, targettile, targethole);
 
+        insertCurrentPositionIfNeeded();
+        
+    }
+
+    private void insertCurrentPositionIfNeeded(){
         // 这边要看我的goal()的第一个位置是不是eitherr tile or hole, 如果是就要在这个goal后面插进去我现在的位置， 但是有可能是targettile或者targethole是null, 要先检查
         if (this.planner.getGoals().size() > 0){
             // 从planner.goal读出第一个goal 的Int2D
             TWObject firstGoal = this.memory.getObject(this.planner.getGoals().get(0).x, this.planner.getGoals().get(0).y);
-
             if (firstGoal instanceof TWTile || firstGoal instanceof TWHole){
                 this.planner.getGoals().add(1, new Int2D(this.x, this.y));
             }
@@ -534,60 +438,45 @@ public class AgentLZH extends TWAgent {
     }
 
     private void addGoalInMiddle(double verysafeFuelThreshold, TWTile targettile, TWHole targethole){
-        
         if (this.planner.getGoals().contains(new Int2D(this.x, this.y))) {
-            int index = planner.getGoals().indexOf(new Int2D(this.x, this.y));
-            if (index != -1){ //如果找到了这个目标
-                ////这个需要debug一下
-                System.out.println(index);
-                planner.getGoals().remove(index);
-            }
+            this.planner.getGoals().remove(new Int2D(this.x, this.y));
         }
+        prioritizeGoal(verysafeFuelThreshold, targettile, targethole);
+    }
+
+    private void prioritizeGoal(double verysafeFuelThreshold, TWTile targettile, TWHole targethole){
         // 如果还没有找到加油站，但是fuellevel> remaining_path to go + fuel threshold, 就可以做别的事情（collect or fill)
-        else if (this.getFuelLevel() > verysafeFuelThreshold){
+        if (this.getFuelLevel() > verysafeFuelThreshold){
             // 先看有没有有没有同时有tile and hole，如果同时有再看距离
-            if (targettile!=null && targethole!=null){
-                // 如果tile更近
-                if (this.carriedTiles.size()<3 && this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY())){
-                    //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                        if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
-                            this.compareAndSetTarget(targettile, index=0);
-                        }
-                    }
-                }
-                // 如果hole更近
-                else{
-                    //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                    // 还要判断身上有没有tile
-                    if (this.carriedTiles.size()>0 && this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                        if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
-                            this.compareAndSetTarget(targethole, index=0);
-                        }
-                    }
-                }
+            // if (targettile!=null && targethole!=null){
+            //     boolean isTileCloser = this.getDistanceTo(targettile.getX(), targettile.getY()) < this.getDistanceTo(targethole.getX(), targethole.getY());
+            //     if (this.carriedTiles.size()< 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
+            //         this.compareAndSetTarget(targettile, 0);
+            //     }
+            //     else if (!isTileCloser && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)){
+            //         this.compareAndSetTarget(targethole, 0);
+            //     }
+            // }
+            // // 如果只有目标tile
+            // else if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
+            //     this.compareAndSetTarget(targettile, 0);
+            // } else if (targethole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targethole, verysafeFuelThreshold)) {
+            //     this.compareAndSetTarget(targethole, 0);
+            // }
+            // // 什么都没有就不用做extra
+            if (targettile != null && this.carriedTiles.size() < 3 && shouldPrioritizeGoal(targettile, verysafeFuelThreshold)) {
+                this.compareAndSetTarget(targettile, 0);
+            } else if (targethole != null && this.carriedTiles.size() > 0 && shouldPrioritizeGoal(targethole, verysafeFuelThreshold)) {
+                this.compareAndSetTarget(targethole, 0);
             }
-            // 如果只有目标tile
-            else if(targettile!=null && this.carriedTiles.size()<3){
-                //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targettile.getX(), targettile.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                    if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targettile.getX(), targettile.getY()))){
-                        this.compareAndSetTarget(targettile, index=0);
-                    }
-                }
-            }
-            // 如果只有目标hole并且自己carriedTiles.size>0
-            else if(targethole!=null && this.carriedTiles.size()>0){
-                //检查去这个地方的step会不会超过上面讲的条件，如果不会：加进goal的第一个位置
-                if (this.getDistanceTo(targethole.getX(), targethole.getY()) + verysafeFuelThreshold < this.getFuelLevel()){
-                    if (!planner.getGoals().isEmpty() && !this.planner.getGoals().contains(new Int2D(targethole.getX(), targethole.getY()))){
-                        this.compareAndSetTarget(targethole, index=0);
-                    }
-                }
-            }
-            // 什么都没有就不用做extra
         }
     }
+
+
+    private boolean shouldPrioritizeGoal(TWEntity entity, double threshold) {
+        return this.getDistanceTo(entity.getX(), entity.getY()) + threshold < this.getFuelLevel();
+    }
+
     
     @Override
     protected TWThought think() {
@@ -720,7 +609,6 @@ public class AgentLZH extends TWAgent {
         // 逻辑思路 现决定模式，再决定Thought
         // mode = Mode.EXPLORE;
 //        先检测是不是刚找到加油站/别人找到了但是自己还在找
-//        if(memory.getFuelStation() == null && mode==Mode.FIND_FUELSTATION) {
         if (mode==Mode.FIND_FUELSTATION && memory.getFuelStation()!= null){
         	mode = Mode.EXPLORE;
         }
@@ -905,71 +793,74 @@ public class AgentLZH extends TWAgent {
         return new TWThought(TWAction.MOVE, dir);
     }
 
+    private void performMoveAction(TWDirection direction) {
+        int newX = this.x + direction.dx;
+        int newY = this.y + direction.dy;
+        if (checkMapOutofBound(newX, newY)) {
+            System.out.println("Out of bound");
+            // Attempt to recover from out of bounds by moving in a valid random direction
+            try {
+                move(RandomMoveThought().getDirection());
+            } catch (CellBlockedException e) {
+                handleBlockedCell(); // Handle the case where even the random direction is blocked
+            }
+        } else {
+            try {
+                move(direction);
+            } catch (CellBlockedException e) {
+                handleBlockedCell(); // Handle blocked cell situation
+            }
+        }
+    }
+
     @Override
     protected void act(TWThought thought){
-        try {
-            switch (thought.getAction()) {
-                case MOVE:
-//				System.out.println("Direction:" + thought.getDirection());
-                    // 不太清楚为什么会out of bound, 检测如果会的话，就随机一个方向
-                    if (this.x + thought.getDirection().dx < 0 || this.x + thought.getDirection().dx >= this.getEnvironment().getxDimension() || this.y + thought.getDirection().dy < 0 || this.y + thought.getDirection().dy >= this.getEnvironment().getyDimension()) {
-                        System.out.println("Out of bound");
-                        //随机的方向也不可以outoufbound, 我没有random的function
-                        move(RandomMoveThought().getDirection());
-                    }
-                    else{
-                        move(thought.getDirection());
-                    }
-                    break;
-                case PICKUP:
-                    TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
-                    pickUpTile(tile);
-                    // planner.getGoals().clear();
-                    planner.getGoals().remove(new Int2D(this.x, this.y));
-                    break;
-                case PUTDOWN:
-                    TWHole hole = (TWHole) memory.getMemoryGrid().get(this.x, this.y);
-                    putTileInHole(hole);
-                    // planner.getGoals().clear();
-                    planner.getGoals().remove(new Int2D(this.x, this.y));
-                    break;
-                case REFUEL:
-                    refuel();
-                    planner.getGoals().clear();
-                    break;
-            }
-//            this.move(thought.getDirection());
-
-        } catch (CellBlockedException ex) {
-//        	System.out.println("Current mode: "+this.mode);
-            System.out.println("Size of goal: "+this.planner.getGoals().size());
-//        	只能等障碍物消失才能继续前进，重新规划路径？
-            System.out.println("N: " + this.memory.isCellBlocked(x, y-1));
-            System.out.println("S: " + this.memory.isCellBlocked(x, y+1));
-            System.out.println("E: " + this.memory.isCellBlocked(x+1, y));
-            System.out.println("W: " + this.memory.isCellBlocked(x-1, y));
-            System.out.println("Cell is blocked. Current Position: " + Integer.toString(this.x) + ", " + Integer.toString(this.y));
+        switch (thought.getAction()) {
+            case MOVE:
+                performMoveAction(thought.getDirection());
+                break;
+            case PICKUP:
+                TWTile tile = (TWTile) memory.getMemoryGrid().get(this.x, this.y);
+                pickUpTile(tile);
+                // planner.getGoals().clear();
+                planner.getGoals().remove(new Int2D(this.x, this.y));
+                break;
+            case PUTDOWN:
+                TWHole hole = (TWHole) memory.getMemoryGrid().get(this.x, this.y);
+                putTileInHole(hole);
+                // planner.getGoals().clear();
+                planner.getGoals().remove(new Int2D(this.x, this.y));
+                break;
+            case REFUEL:
+                refuel();
+                planner.getGoals().clear();
+                break;
         }
+        printAgentState();
+    }
+
+    private void handleBlockedCell() {
+        System.out.println("Size of goal: " + this.planner.getGoals().size());
+        System.out.println("N: " + this.memory.isCellBlocked(x, y - 1));
+        System.out.println("S: " + this.memory.isCellBlocked(x, y + 1));
+        System.out.println("E: " + this.memory.isCellBlocked(x + 1, y));
+        System.out.println("W: " + this.memory.isCellBlocked(x - 1, y));
+        System.out.println("Cell is blocked. Current Position: " + this.x + ", " + this.y);
+    }
+    
+    private void printAgentState() {
         System.out.println("Step " + this.getEnvironment().schedule.getSteps());
         System.out.println(name + " score: " + this.score);
-//		System.out.println("Assigned Zone: " + Integer.toString(agentZones[agentIdx]));
-//		System.out.println("Mode: " + mode.name());
-        System.out.println("Position: " + Integer.toString(this.x) + ", " + Integer.toString(this.y));
-        System.out.println("Current Mode: " + this.mode);
-        System.out.println("Size of goal: "+this.planner.getGoals().size());
-
+        System.out.println("Position: " + this.x + ", " + this.y);
+        System.out.println("Current State: " + this.mode);
+        System.out.println("Size of goal: " + this.planner.getGoals().size());
         Int2D curGoal = planner.getCurrentGoal();
-        if (curGoal != null) {
-            System.out.println("Goal: " + curGoal.x + ", " + curGoal.y);
-        }
-        else
-            System.out.println("Goal: Nothing");
+        System.out.println("Goal: " + (curGoal != null ? curGoal.x + ", " + curGoal.y : "Nothing"));
         System.out.println("Tiles: " + this.carriedTiles.size());
         System.out.println("Fuel Level: " + this.fuelLevel);
         System.out.println("Fuel Station: " + this.memory.getFuelStation());
         System.out.println("");
     }
-            
 
     @Override
     public TWAgentWorkingMemory getMemory() {

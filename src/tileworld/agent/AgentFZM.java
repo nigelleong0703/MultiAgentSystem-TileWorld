@@ -128,21 +128,49 @@ public class AgentFZM extends TWAgent {
         Int2D nearestBase = findNearestBase(basePos, this.memory.getAgentPositionAll());
         System.out.println(this.name + ", I need to go to: " + nearestBase);
 
+        // // 添加目标位置
+        // // int stripDepth = Parameters.yDimension / 5;
+        // int sensorRange = Parameters.defaultSensorRange;
+        // int maxDepth = Parameters.yDimension - sensorRange - 1;
+        // for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
+        //     int posY = Math.min(depth, maxDepth); // 确保不会超出边界
+        //     Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
+        //     Int2D leftEdgePosition = new Int2D(sensorRange, posY);
+
+        //     // 添加从基地向右侧和左侧的目标位置
+        //     planner.getGoals().add(getPositionAdd(nearestBase, new Int2D(0, posY)));
+        //     planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+        //     if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
+        //         planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+        //     }
+        // }
         // 添加目标位置
-        // int stripDepth = Parameters.yDimension / 5;
         int sensorRange = Parameters.defaultSensorRange;
         int maxDepth = Parameters.yDimension - sensorRange - 1;
+        boolean addRightFirst = true;
         for (int depth = sensorRange; depth <= maxDepth; depth += sensorRange * 2) {
             int posY = Math.min(depth, maxDepth); // 确保不会超出边界
             Int2D rightEdgePosition = new Int2D(Parameters.xDimension - sensorRange - 1, posY);
             Int2D leftEdgePosition = new Int2D(sensorRange, posY);
 
-            // 添加从基地向右侧和左侧的目标位置
-            planner.getGoals().add(getPositionAdd(nearestBase, new Int2D(0, posY)));
-            planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
-            if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
+            // 根据addRightFirst变量决定添加顺序，形成"S形"模式
+            if (addRightFirst) {
+                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
                 planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+            } else {
+                planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+                planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
             }
+            
+            if (posY != depth) { // 如果是最后一轮迭代，也添加左边的位置
+                if (addRightFirst) {
+                    planner.getGoals().add(getPositionAdd(nearestBase, rightEdgePosition));
+                } else {
+                    planner.getGoals().add(getPositionAdd(nearestBase, leftEdgePosition));
+                }
+            }
+            // Toggle the addition order for the next iteration
+            addRightFirst = !addRightFirst;
         }
     }
 
